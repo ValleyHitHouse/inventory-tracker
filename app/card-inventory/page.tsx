@@ -46,12 +46,12 @@ export default function CardInventoryPage() {
 
   const [lotName, setLotName] = useState("");
   const [giveawayCount, setGiveawayCount] = useState(0);
-  const [pricePerCard, setPricePerCard] = useState("");
+  const [giveawayTotalPrice, setGiveawayTotalPrice] = useState("");
   const [selectedSet, setSelectedSet] = useState(0);
   const [allCards, setAllCards] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
   const [activeSubset, setActiveSubset] = useState("Chasers");
-  const [picked, setPicked] = useState<Record<string, {card: any, qty: number, subset: string}>>({});
+  const [picked, setPicked] = useState<Record<string, {card: any, qty: number, subset: string, pricePaid: string}>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadInventory(); }, []);
@@ -82,7 +82,7 @@ export default function CardInventoryPage() {
     const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
     setPicked(prev => ({
       ...prev,
-      [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, subset: activeSubset }
+      [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, subset: activeSubset, pricePaid: "" }
     }));
   }
 
@@ -94,6 +94,10 @@ export default function CardInventoryPage() {
     }
   }
 
+  function updatePrice(key: string, price: string) {
+    setPicked(prev => ({ ...prev, [key]: { ...prev[key], pricePaid: price } }));
+  }
+
   async function saveIntake() {
     if (!lotName) return alert("Please enter a lot name!");
     setSaving(true);
@@ -101,7 +105,7 @@ export default function CardInventoryPage() {
     await supabase.from("cardlots").insert({
       lot_name: lotName,
       giveaway_count: giveawayCount,
-      price_per_card: parseFloat(pricePerCard || "0"),
+      price_per_card: parseFloat(giveawayTotalPrice || "0"),
     });
 
     if (giveawayCount > 0) {
@@ -110,7 +114,7 @@ export default function CardInventoryPage() {
       if (giv) await supabase.from("Inventory").update({ quantity: giv.quantity + giveawayCount }).eq("id", 1);
     }
 
-    const rows = Object.values(picked).map(({ card, qty, subset }) => ({
+    const rows = Object.values(picked).map(({ card, qty, subset, pricePaid }) => ({
       subset,
       card_number: card["Card #"],
       hero: card.Hero,
@@ -119,6 +123,7 @@ export default function CardInventoryPage() {
       weapon: card.Weapon,
       set_name: SETS[selectedSet].label,
       quantity: qty,
+      price_paid: parseFloat(pricePaid || "0"),
     }));
     if (rows.length > 0) await supabase.from("cardinventory").insert(rows);
 
@@ -136,7 +141,7 @@ export default function CardInventoryPage() {
     await loadInventory();
     setSaving(false);
     setView("inventory");
-    setLotName(""); setGiveawayCount(0); setPricePerCard(""); setPicked({}); setCardSearch("");
+    setLotName(""); setGiveawayCount(0); setGiveawayTotalPrice(""); setPicked({}); setCardSearch("");
   }
 
   const s = {
@@ -145,6 +150,7 @@ export default function CardInventoryPage() {
     section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
     input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" },
+    smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "#e5e5e5", outline: "none", width: 80 },
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
     th: { padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" },
     td: { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
@@ -170,7 +176,6 @@ export default function CardInventoryPage() {
             <button onClick={() => setView("intake")} style={s.submitBtn}>+ Log card lot</button>
           </div>
         </div>
-
         {lots.length === 0 ? (
           <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
             <p style={{ color: "#555", fontSize: 13 }}>No lots logged yet.</p>
@@ -182,7 +187,7 @@ export default function CardInventoryPage() {
                 <tr style={{ background: "#0f0f0f" }}>
                   <th style={s.th}>Lot name</th>
                   <th style={s.th}>Giveaway cards</th>
-                  <th style={s.th}>Price per card</th>
+                  <th style={s.th}>Giveaway total price</th>
                   <th style={s.th}>Date logged</th>
                 </tr>
               </thead>
@@ -227,8 +232,8 @@ export default function CardInventoryPage() {
               <input style={s.input} type="number" min={0} value={giveawayCount} onChange={e => setGiveawayCount(Number(e.target.value))} />
             </div>
             <div>
-              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Price per card ($)</label>
-              <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 2.50" value={pricePerCard} onChange={e => setPricePerCard(e.target.value)} />
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Total price paid for giveaways ($)</label>
+              <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 125.00" value={giveawayTotalPrice} onChange={e => setGiveawayTotalPrice(e.target.value)} />
             </div>
           </div>
         </div>
@@ -294,12 +299,13 @@ export default function CardInventoryPage() {
           </div>
         </div>
 
+        {/* Picked cards with price per card */}
         {Object.keys(picked).length > 0 && (
           <div style={s.section}>
-            <div style={s.sectionTitle}>Cards in this lot ({Object.keys(picked).length})</div>
-            {Object.entries(picked).map(([key, { card, qty, subset }]) => (
+            <div style={s.sectionTitle}>Cards in this lot — enter price paid per card</div>
+            {Object.entries(picked).map(([key, { card, qty, subset, pricePaid }]) => (
               <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #161616" }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
                   <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{subset}</span>
                   <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                   <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.Hero}</span>
@@ -308,13 +314,40 @@ export default function CardInventoryPage() {
                   {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
                   {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
-                  <button onClick={e => { e.stopPropagation(); updateQty(key, qty - 1); }} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
-                  <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
-                  <button onClick={e => { e.stopPropagation(); updateQty(key, qty + 1); }} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 11, color: "#555" }}>$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="Price paid"
+                      value={pricePaid}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => { e.stopPropagation(); updatePrice(key, e.target.value); }}
+                      style={{ ...s.smallInput, width: 90 }}
+                    />
+                    <span style={{ fontSize: 11, color: "#555" }}>each</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={e => { e.stopPropagation(); updateQty(key, qty - 1); }} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
+                    <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
+                    <button onClick={e => { e.stopPropagation(); updateQty(key, qty + 1); }} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
+                  </div>
                 </div>
               </div>
             ))}
+
+            {/* Total cost summary */}
+            <div style={{ marginTop: 16, padding: "12px 16px", background: "#0f0f0f", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#555" }}>Total cost this lot</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#fb923c" }}>
+                ${(
+                  parseFloat(giveawayTotalPrice || "0") +
+                  Object.values(picked).reduce((sum, { qty, pricePaid }) => sum + qty * parseFloat(pricePaid || "0"), 0)
+                ).toFixed(2)}
+              </span>
+            </div>
           </div>
         )}
 
@@ -372,6 +405,7 @@ export default function CardInventoryPage() {
                       <th style={s.th}>Set</th>
                       <th style={s.th}>Weapon</th>
                       <th style={s.th}>Power</th>
+                      <th style={s.th}>Price Paid</th>
                       <th style={s.th}>Qty</th>
                     </tr>
                   </thead>
@@ -391,6 +425,7 @@ export default function CardInventoryPage() {
                           )}
                         </td>
                         <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.power}</td>
+                        <td style={{ ...s.td, color: "#fb923c", fontWeight: 600 }}>{item.price_paid ? `$${parseFloat(item.price_paid).toFixed(2)}` : "—"}</td>
                         <td style={{ ...s.td, color: "#fb923c", fontWeight: 600 }}>{item.quantity}</td>
                       </tr>
                     ))}
