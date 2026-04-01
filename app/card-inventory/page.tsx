@@ -26,6 +26,11 @@ const SETS = [
 
 const SUBSETS = ["Chasers", "Insurance", "First Timers"];
 
+const weaponColors: Record<string, string> = {
+  Fire: "#fb923c", Ice: "#38bdf8", Steel: "#94a3b8",
+  Gum: "#f472b6", Hex: "#a78bfa", Glow: "#4ade80", Brawl: "#f87171"
+};
+
 export default function CardInventoryPage() {
   const [view, setView] = useState<"inventory"|"intake">("inventory");
   const [giveawayTotal, setGiveawayTotal] = useState(0);
@@ -61,11 +66,11 @@ export default function CardInventoryPage() {
 
   const filteredCards = allCards.filter(c => {
     const q = cardSearch.toLowerCase();
-    return !q || c.Hero?.toLowerCase().includes(q) || c["Athlete Inspiration"]?.toLowerCase().includes(q) || c["Card #"]?.toLowerCase().includes(q);
+    return !q || c.Hero?.toLowerCase().includes(q) || c["Athlete Inspiration"]?.toLowerCase().includes(q) || c["Card #"]?.toLowerCase().includes(q) || c.Variation?.toLowerCase().includes(q);
   }).slice(0, 50);
 
   function pickCard(card: any) {
-    const key = `${card["Card #"]}-${activeSubset}`;
+    const key = `${card["Card #"]}-${card.Weapon}-${activeSubset}`;
     setPicked(prev => ({
       ...prev,
       [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, subset: activeSubset }
@@ -84,15 +89,12 @@ export default function CardInventoryPage() {
     if (!lotName) return alert("Please enter a lot name!");
     setSaving(true);
 
-    // Save lot
     await supabase.from("CardLots").insert({ lot_name: lotName, giveaway_count: giveawayCount });
 
-    // Update giveaway total
     if (giveawayCount > 0) {
       await supabase.from("GiveawayTotal").update({ total: giveawayTotal + giveawayCount }).eq("id", 1);
     }
 
-    // Save picked cards to CardInventory
     const rows = Object.values(picked).map(({ card, qty, subset }) => ({
       subset,
       card_number: card["Card #"],
@@ -110,11 +112,6 @@ export default function CardInventoryPage() {
     setView("inventory");
     setLotName(""); setGiveawayCount(0); setPicked({}); setCardSearch("");
   }
-
-  const weaponColors: Record<string, string> = {
-    Fire: "#fb923c", Ice: "#38bdf8", Steel: "#94a3b8",
-    Gum: "#f472b6", Hex: "#a78bfa", Glow: "#4ade80", Brawl: "#f87171"
-  };
 
   const s = {
     shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" },
@@ -187,14 +184,19 @@ export default function CardInventoryPage() {
           </div>
 
           {/* Search */}
-          <input style={{ ...s.input, marginBottom: 12 }} placeholder="🔍 Search cards by hero, athlete, card #..." value={cardSearch} onChange={e => setCardSearch(e.target.value)} />
+          <input
+            style={{ ...s.input, marginBottom: 12 }}
+            placeholder="🔍 Search by hero, athlete, card #, variation..."
+            value={cardSearch}
+            onChange={e => setCardSearch(e.target.value)}
+          />
 
           {/* Card results */}
-          <div style={{ maxHeight: 280, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8 }}>
+          <div style={{ maxHeight: 320, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8 }}>
             {filteredCards.length === 0 ? (
               <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>Type to search cards</div>
             ) : filteredCards.map((card, i) => {
-              const key = `${card["Card #"]}-${activeSubset}`;
+              const key = `${card["Card #"]}-${card.Weapon}-${activeSubset}`;
               const isPicked = !!picked[key];
               return (
                 <div key={i} onClick={() => pickCard(card)} style={{
@@ -202,13 +204,21 @@ export default function CardInventoryPage() {
                   padding: "10px 14px", borderBottom: "1px solid #161616", cursor: "pointer",
                   background: isPicked ? "#a78bfa11" : "transparent",
                 }}>
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
                     <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
-                    {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
+                    {card.Weapon && (
+                      <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>
+                        {card.Weapon}
+                      </span>
+                    )}
+                    {card.Variation && <span style={{ color: "#777", fontSize: 11 }}>{card.Variation}</span>}
+                    {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                   </div>
-                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333" }}>{isPicked ? `✓ ${picked[key].qty} added` : "+ Add"}</span>
+                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8 }}>
+                    {isPicked ? `✓ ${picked[key].qty} added` : "+ Add"}
+                  </span>
                 </div>
               );
             })}
@@ -220,14 +230,21 @@ export default function CardInventoryPage() {
           <div style={s.section}>
             <div style={s.sectionTitle}>Cards in this lot ({Object.keys(picked).length})</div>
             {Object.entries(picked).map(([key, { card, qty, subset }]) => (
-              <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #161616" }}>
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #161616" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{subset}</span>
                   <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
-                  <span style={{ color: "#e5e5e5", fontSize: 13 }}>{card.Hero}</span>
-                  <span style={{ color: "#777", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
+                  <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.Hero}</span>
+                  <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
+                  {card.Weapon && (
+                    <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>
+                      {card.Weapon}
+                    </span>
+                  )}
+                  {card.Variation && <span style={{ color: "#777", fontSize: 11 }}>{card.Variation}</span>}
+                  {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
                   <button onClick={() => updateQty(key, qty - 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
                   <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
                   <button onClick={() => updateQty(key, qty + 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
@@ -289,6 +306,7 @@ export default function CardInventoryPage() {
                       <th style={s.th}>Variation</th>
                       <th style={s.th}>Set</th>
                       <th style={s.th}>Weapon</th>
+                      <th style={s.th}>Power</th>
                       <th style={s.th}>Qty</th>
                     </tr>
                   </thead>
@@ -307,6 +325,7 @@ export default function CardInventoryPage() {
                             </span>
                           )}
                         </td>
+                        <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.power}</td>
                         <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.quantity}</td>
                       </tr>
                     ))}
