@@ -137,10 +137,14 @@ export default function Breaks() {
             value: parseFloat(item.price_paid || "0"),
           }))
         );
-        // Deduct from card inventory
-        for (const { item, qty } of Object.values(pickedCards)) {
-          const newQty = Math.max(0, item.quantity - qty);
-          await supabase.from("cardinventory").update({ quantity: newQty }).eq("id", item.id);
+        // Deduct from card inventory — delete if qty hits 0
+for (const { item, qty } of Object.values(pickedCards)) {
+  const newQty = Math.max(0, item.quantity - qty);
+  if (newQty === 0) {
+    await supabase.from("cardinventory").delete().eq("id", item.id);
+  } else {
+    await supabase.from("cardinventory").update({ quantity: newQty }).eq("id", item.id);
+  }
           // Also deduct from main Inventory table
           const subsetToId: Record<string, number> = { Chasers: 4, Insurance: 3, "First Timers": 2 };
           const invId = subsetToId[item.subset];
