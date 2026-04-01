@@ -30,12 +30,13 @@ export default function Sidebar() {
         <img src="/LOGO-BG.png" alt="ValleyHitHouse" style={{ width: 140, height: "auto" }} />
         <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>Dashboard</div>
       </div>
-      <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+      <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 4, overflowY: "auto" }}>
         <NavLink href="/" emoji="🏠" label="Home" />
         <NavLink href="/inventory" emoji="📦" label="Inventory" />
         <NavLink href="/breaks" emoji="🎴" label="Breaks" />
         <NavLink href="/customers" emoji="👥" label="Customers" />
         <NavLink href="/cards" emoji="🃏" label="Card Database" />
+        <NavLink href="/card-inventory" emoji="📋" label="Card Inventory" />
         <NavLink href="/orders" emoji="📋" label="Orders" soon />
         <NavLink href="/sales" emoji="📈" label="Sales" soon />
         <NavLink href="/analytics" emoji="📊" label="Analytics" soon />
