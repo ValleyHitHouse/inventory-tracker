@@ -78,6 +78,7 @@ export default function Breaks() {
   const netProfit = revenue - totalCost;
 
   const filteredCardInventory = cardInventory.filter(c => {
+    if (c.quantity <= 0) return false;
     const q = cardSearch.toLowerCase();
     return !q || c.hero?.toLowerCase().includes(q) || c.athlete?.toLowerCase().includes(q) || c.card_number?.toLowerCase().includes(q) || c.subset?.toLowerCase().includes(q);
   }).slice(0, 50);
