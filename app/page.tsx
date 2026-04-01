@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 const LOW = 20;
 
@@ -9,38 +10,50 @@ function statusInfo(qty: number) {
   return { label: "In stock", color: "#2e7d32", bg: "#e6f4ea" };
 }
 
-function Row({ name, init, cost, reorder }: { name: string; init: number; cost: string; reorder: React.ReactNode }) {
-  const [qty, setQty] = useState(init);
-  const s = statusInfo(qty);
-  return (
-    <tr style={{ borderBottom: "1px solid #eee" }}>
-      <td style={{ padding: "10px 12px" }}>{name}</td>
-      <td style={{ padding: "10px 12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button onClick={() => setQty(q => Math.max(0, q - 1))} style={btnStyle}>−</button>
-          <input value={qty} onChange={e => setQty(Math.max(0, Number(e.target.value)))} style={inputStyle} type="number" />
-          <button onClick={() => setQty(q => q + 1)} style={btnStyle}>+</button>
-        </div>
-      </td>
-      <td style={{ padding: "10px 12px", color: "#888" }}>{cost}</td>
-      <td style={{ padding: "10px 12px" }}>
-        <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, background: s.bg, color: s.color }}>{s.label}</span>
-      </td>
-      <td style={{ padding: "10px 12px", fontSize: 13 }}>{reorder}</td>
-    </tr>
-  );
-}
-
 const btnStyle = { width: 24, height: 24, border: "1px solid #ddd", background: "#f5f5f5", borderRadius: 4, cursor: "pointer", fontSize: 14 };
 const inputStyle = { width: 52, textAlign: "center" as const, border: "1px solid #ddd", borderRadius: 4, padding: "2px 4px", fontSize: 13 };
 const thStyle = { padding: "10px 12px", background: "#f5f5f5", borderBottom: "2px solid #e0e0e0", fontSize: 12, textAlign: "left" as const, color: "#666" };
 
-function Section({ title, badge, color, children }: { title: string; badge: string; color: string; children: React.ReactNode }) {
+function Row({ item, onUpdate }: { item: any; onUpdate: (id: number, qty: number) => void }) {
+  const [qty, setQty] = useState(item.quantity);
+  const s = statusInfo(qty);
+
+  function change(newQty: number) {
+    const q = Math.max(0, newQty);
+    setQty(q);
+    onUpdate(item.id, q);
+  }
+
+  const isLink = item.reorder?.startsWith("http") || item.reorder?.startsWith("amazon") || item.reorder?.startsWith("cardshellz");
+  const reorderEl = isLink
+    ? <a href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`} target="_blank" style={{ color: "#1a73e8", fontSize: 12, textDecoration: "none" }}>Order now</a>
+    : <span style={{ color: "#888", fontSize: 12, fontStyle: "italic" }}>{item.reorder}</span>;
+
+  return (
+    <tr style={{ borderBottom: "1px solid #eee" }}>
+      <td style={{ padding: "10px 12px" }}>{item.name}</td>
+      <td style={{ padding: "10px 12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={() => change(qty - 1)} style={btnStyle}>−</button>
+          <input value={qty} onChange={e => change(Number(e.target.value))} style={inputStyle} type="number" />
+          <button onClick={() => change(qty + 1)} style={btnStyle}>+</button>
+        </div>
+      </td>
+      <td style={{ padding: "10px 12px", color: "#888" }}>{item.cost}</td>
+      <td style={{ padding: "10px 12px" }}>
+        <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, background: s.bg, color: s.color }}>{s.label}</span>
+      </td>
+      <td style={{ padding: "10px 12px" }}>{reorderEl}</td>
+    </tr>
+  );
+}
+
+function Section({ title, color, items, onUpdate }: { title: string; color: string; items: any[]; onUpdate: (id: number, qty: number) => void }) {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600 }}>{title}</h2>
-        <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 20, background: color, color: "#333" }}>{badge}</span>
+        <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: color, color: "#333" }}>{items.length} items</span>
       </div>
       <div style={{ border: "1px solid #eee", borderRadius: 10, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -51,49 +64,53 @@ function Section({ title, badge, color, children }: { title: string; badge: stri
             <th style={{ ...thStyle, width: "14%" }}>Status</th>
             <th style={{ ...thStyle, width: "26%" }}>Reorder</th>
           </tr></thead>
-          <tbody>{children}</tbody>
+          <tbody>{items.map(item => <Row key={item.id} item={item} onUpdate={onUpdate} />)}</tbody>
         </table>
       </div>
     </div>
   );
 }
 
-const link = (url: string, label: string) => <a href={url} target="_blank" style={{ color: "#1a73e8", textDecoration: "none" }}>{label}</a>;
-const contact = (msg: string) => <span style={{ color: "#888", fontStyle: "italic" }}>{msg}</span>;
-
 export default function Home() {
+  const [items, setItems] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    supabase.from("Inventory").select("*").order("id").then(({ data }) => {
+      if (data) setItems(data);
+    });
+  }, []);
+
+  async function handleUpdate(id: number, qty: number) {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i));
+    setSaving(true);
+    setSaved(false);
+    await supabase.from("Inventory").update({ quantity: qty }).eq("id", id);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const cards = items.filter(i => i.category === "Cards");
+  const supplies = items.filter(i => i.category === "Supplies");
+  const branding = items.filter(i => i.category === "Branding");
+
   return (
     <main style={{ fontFamily: "sans-serif", maxWidth: 960, margin: "40px auto", padding: "0 20px" }}>
-      <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>ValleyHitHouse inventory</h1>
-      <p style={{ color: "#888", marginBottom: 28, fontSize: 13 }}>Internal use only — click + / − to edit quantities</p>
-
-      <Section title="Card inventory" badge="4 items" color="#e3f2fd">
-        <Row name="Giveaway cards" init={100} cost="$1–$2" reorder={contact("—")} />
-        <Row name="First time buyer cards" init={50} cost="$25–$50" reorder={contact("—")} />
-        <Row name="Insurance cards" init={120} cost="$30–$75" reorder={contact("—")} />
-        <Row name="Chaser cards" init={25} cost="$100+" reorder={contact("—")} />
-      </Section>
-
-      <Section title="Supplies inventory" badge="12 items" color="#e8f5e9">
-        <Row name="Bubble mailers" init={1000} cost="$0.24" reorder={link("https://www.amazon.com/6x10-Self-Seal-Envelopes-Waterproof-Cushioning/dp/B09NJMF6VT/", "Order on Amazon")} />
-        <Row name="Bubble holders" init={500} cost="$0.12" reorder={link("https://www.amazon.com/Frienda-Shockproof-Protective-Business-Packaging/dp/B0CM68FCX2/", "Order on Amazon")} />
-        <Row name="Team bags" init={1000} cost="$0.03" reorder={link("https://www.amazon.com/Trading-Card-Supplies-Resealable-Plastic/dp/B00F1ZS3EE/", "Order on Amazon")} />
-        <Row name="Toploaders" init={1000} cost="$0.10" reorder={link("https://www.cardshellz.com/products/3x4-toploader-35pt-essentials-easy-glide-combo-pack", "Order on CardShellz")} />
-        <Row name="Penny sleeves" init={1000} cost="$0.02" reorder={link("https://www.cardshellz.com/products/easy-glide-soft-sleeves", "Order on CardShellz")} />
-        <Row name="MagPros" init={800} cost="$2.20" reorder={contact("Email Alex@zioncases.com")} />
-        <Row name="Shipping labels" init={500} cost="$0.04" reorder={link("https://www.amazon.com/ROLLO-Thermal-Direct-Shipping-Fan-Fold/dp/B01M9AR01Q/", "Order on Amazon")} />
-        <Row name="Boxes (S)" init={100} cost="$2.00" reorder={contact("Amazon — add link")} />
-        <Row name="Boxes (M)" init={100} cost="$2.00" reorder={contact("Amazon — add link")} />
-        <Row name="Boxes (L)" init={100} cost="$2.00" reorder={contact("Amazon — add link")} />
-        <Row name="Packing tape" init={5} cost="$3.00" reorder={link("https://www.amazon.com/Scotch-Shipping-Packaging-Dispenser-142L/dp/B000MVV6AA/", "Order on Amazon")} />
-        <Row name="Packing paper" init={1} cost="$28.00" reorder={link("https://www.amazon.com/ANF-Brands-12-1200-feet/dp/B0DNYQLF85/", "Order on Amazon")} />
-      </Section>
-
-      <Section title="Branding inventory" badge="3 items" color="#f3e5f5">
-        <Row name="Stickers" init={250} cost="$0.50" reorder={contact("Email Alex@zioncases.com")} />
-        <Row name="Hats" init={5} cost="$12.00" reorder={contact("Text OGPanda to order")} />
-        <Row name="Shirts" init={3} cost="$20.00" reorder={contact("Text OGPanda to order")} />
-      </Section>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>ValleyHitHouse inventory</h1>
+          <p style={{ color: "#888", fontSize: 13 }}>Changes save automatically</p>
+        </div>
+        {saving && <span style={{ fontSize: 13, color: "#888" }}>Saving...</span>}
+        {saved && <span style={{ fontSize: 13, color: "#2e7d32" }}>Saved!</span>}
+      </div>
+      {items.length === 0 ? <p style={{ color: "#888" }}>Loading...</p> : <>
+        <Section title="Card inventory" color="#e3f2fd" items={cards} onUpdate={handleUpdate} />
+        <Section title="Supplies inventory" color="#e8f5e9" items={supplies} onUpdate={handleUpdate} />
+        <Section title="Branding inventory" color="#f3e5f5" items={branding} onUpdate={handleUpdate} />
+      </>}
     </main>
   );
 }
