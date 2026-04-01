@@ -20,6 +20,11 @@ function parseCSV(text: string) {
   });
 }
 
+const weaponColors: Record<string, string> = {
+  Fire: "#fb923c", Ice: "#38bdf8", Steel: "#94a3b8",
+  Gum: "#f472b6", Hex: "#a78bfa", Glow: "#4ade80", Brawl: "#f87171"
+};
+
 export default function Breaks() {
   const [breaks, setBreaks] = useState<any[]>([]);
   const [view, setView] = useState<"list"|"new">("list");
@@ -27,7 +32,6 @@ export default function Breaks() {
   const [boxName, setBoxName] = useState("");
   const [numBoxes, setNumBoxes] = useState(1);
   const [boxValue, setBoxValue] = useState("");
-  const [chasers, setChasers] = useState([{ type: "inventory", name: "", qty: 1, value: "" }]);
   const [supplies, setSupplies] = useState([{ name: "Bubble mailers", qty: 1 }]);
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvName, setCsvName] = useState("");
@@ -35,13 +39,24 @@ export default function Breaks() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
+  // Card inventory picker
+  const [cardInventory, setCardInventory] = useState<any[]>([]);
+  const [cardSearch, setCardSearch] = useState("");
+  const [pickedCards, setPickedCards] = useState<Record<string, {item: any, qty: number}>>({});
+
   useEffect(() => {
     loadBreaks();
+    loadCardInventory();
   }, []);
 
   async function loadBreaks() {
     const { data } = await supabase.from("Breaks").select("*").order("date", { ascending: false });
     if (data) setBreaks(data);
+  }
+
+  async function loadCardInventory() {
+    const { data } = await supabase.from("cardinventory").select("*").order("subset").order("hero");
+    if (data) setCardInventory(data);
   }
 
   async function deleteBreak(id: number) {
@@ -58,8 +73,33 @@ export default function Breaks() {
   const revenue = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
   const freeGiveaways = csvData.filter(r => parseFloat(r.original_item_price || "0") === 0).length;
-  const totalCost = parseFloat(boxValue || "0") + chasers.reduce((s, c) => s + parseFloat(c.value || "0") * c.qty, 0);
+  const cardCost = Object.values(pickedCards).reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
+  const totalCost = parseFloat(boxValue || "0") + cardCost;
   const netProfit = revenue - totalCost;
+
+  const filteredCardInventory = cardInventory.filter(c => {
+    const q = cardSearch.toLowerCase();
+    return !q || c.hero?.toLowerCase().includes(q) || c.athlete?.toLowerCase().includes(q) || c.card_number?.toLowerCase().includes(q) || c.subset?.toLowerCase().includes(q);
+  }).slice(0, 50);
+
+  function pickCard(item: any) {
+    const key = `${item.id}`;
+    const maxQty = item.quantity;
+    setPickedCards(prev => {
+      const current = prev[key]?.qty || 0;
+      if (current >= maxQty) return prev;
+      return { ...prev, [key]: { item, qty: current + 1 } };
+    });
+  }
+
+  function updateCardQty(key: string, qty: number) {
+    if (qty <= 0) {
+      setPickedCards(prev => { const n = { ...prev }; delete n[key]; return n; });
+    } else {
+      const maxQty = pickedCards[key]?.item?.quantity || 999;
+      setPickedCards(prev => ({ ...prev, [key]: { ...prev[key], qty: Math.min(qty, maxQty) } }));
+    }
+  }
 
   function handleCSV(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -86,11 +126,31 @@ export default function Breaks() {
     }).select().single();
 
     if (brk) {
-      if (chasers.length) {
+      // Save picked cards as chasers
+      if (Object.keys(pickedCards).length > 0) {
         await supabase.from("BreakChasers").insert(
-          chasers.map(c => ({ break_id: brk.id, name: c.name, type: c.type, quantity: c.qty, value: parseFloat(c.value || "0") }))
+          Object.values(pickedCards).map(({ item, qty }) => ({
+            break_id: brk.id,
+            name: `${item.hero} (${item.athlete})`,
+            type: item.subset,
+            quantity: qty,
+            value: parseFloat(item.price_paid || "0"),
+          }))
         );
+        // Deduct from card inventory
+        for (const { item, qty } of Object.values(pickedCards)) {
+          const newQty = Math.max(0, item.quantity - qty);
+          await supabase.from("cardinventory").update({ quantity: newQty }).eq("id", item.id);
+          // Also deduct from main Inventory table
+          const subsetToId: Record<string, number> = { Chasers: 4, Insurance: 3, "First Timers": 2 };
+          const invId = subsetToId[item.subset];
+          if (invId) {
+            const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
+            if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - qty) }).eq("id", invId);
+          }
+        }
       }
+
       if (supplies.length) {
         await supabase.from("BreakSupplies").insert(
           supplies.map(s => ({ break_id: brk.id, supply_name: s.name, quantity_used: s.qty }))
@@ -117,15 +177,30 @@ export default function Breaks() {
         if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - s.qty) }).eq("id", inv.id);
       }
     }
+
     await loadBreaks();
+    await loadCardInventory();
     setSaving(false);
     setView("list");
     setCsvData([]); setCsvName(""); setBoxName(""); setBoxValue(""); setNumBoxes(1);
-    setChasers([{ type: "inventory", name: "", qty: 1, value: "" }]);
+    setPickedCards({}); setCardSearch("");
     setSupplies([{ name: "Bubble mailers", qty: 1 }]);
   }
 
-  const s = { shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }, content: { padding: 24, maxWidth: 800, margin: "0 auto" }, section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 }, sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 }, label: { fontSize: 12, color: "#666", marginBottom: 5, display: "block" }, input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" }, row: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }, addBtn: { fontSize: 12, color: "#a78bfa", background: "none", border: "1px dashed #333", borderRadius: 6, padding: "7px 12px", cursor: "pointer", width: "100%", marginTop: 4 }, removeBtn: { background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, padding: "0 4px" }, submitBtn: { width: "100%", background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", marginTop: 4 }, stat: { background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px" }, statLabel: { fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: ".4px" }, statValue: { fontSize: 20, fontWeight: 700 } };
+  const s = {
+    shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" },
+    content: { padding: 24, maxWidth: 800, margin: "0 auto" },
+    section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
+    sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
+    label: { fontSize: 12, color: "#666", marginBottom: 5, display: "block" },
+    input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" },
+    row: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 },
+    addBtn: { fontSize: 12, color: "#a78bfa", background: "none", border: "1px dashed #333", borderRadius: 6, padding: "7px 12px", cursor: "pointer", width: "100%", marginTop: 4 },
+    submitBtn: { width: "100%", background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", marginTop: 4 },
+    stat: { background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px" },
+    statLabel: { fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: ".4px" },
+    statValue: { fontSize: 20, fontWeight: 700 },
+  };
 
   if (view === "list") return (
     <div style={s.shell}>
@@ -160,24 +235,13 @@ export default function Breaks() {
                     <td style={{ padding: "10px 14px" }}>
                       {confirmId === b.id ? (
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            onClick={() => deleteBreak(b.id)}
-                            disabled={deletingId === b.id}
-                            style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                          <button onClick={() => deleteBreak(b.id)} disabled={deletingId === b.id} style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
                             {deletingId === b.id ? "Deleting..." : "Confirm"}
                           </button>
-                          <button
-                            onClick={() => setConfirmId(null)}
-                            style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
-                            Cancel
-                          </button>
+                          <button onClick={() => setConfirmId(null)} style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Cancel</button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => setConfirmId(b.id)}
-                          style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
-                          Delete
-                        </button>
+                        <button onClick={() => setConfirmId(b.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Delete</button>
                       )}
                     </td>
                   </tr>
@@ -207,21 +271,74 @@ export default function Breaks() {
           </div>
         </div>
 
+        {/* Card inventory picker */}
         <div style={s.section}>
-          <div style={s.sectionTitle}>Chasers included</div>
-          {chasers.map((c, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-              <select style={{ ...s.input, flex: 1 }} value={c.type} onChange={e => setChasers(prev => prev.map((x, j) => j === i ? { ...x, type: e.target.value } : x))}>
-                <option value="inventory">From inventory</option>
-                <option value="custom">Custom</option>
-              </select>
-              <input style={{ ...s.input, flex: 2 }} placeholder="Chaser name" value={c.name} onChange={e => setChasers(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-              <input style={{ ...s.input, width: 70, flex: "none" }} type="number" min={1} placeholder="Qty" value={c.qty} onChange={e => setChasers(prev => prev.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) } : x))} />
-              <input style={{ ...s.input, width: 90, flex: "none" }} type="number" placeholder="Value $" value={c.value} onChange={e => setChasers(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />
-              <button style={s.removeBtn} onClick={() => setChasers(prev => prev.filter((_, j) => j !== i))}>×</button>
+          <div style={s.sectionTitle}>Cards used in this break</div>
+          <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Search your card inventory — selected cards will be deducted when break is saved</p>
+
+          <input
+            style={{ ...s.input, marginBottom: 12 }}
+            placeholder="🔍 Search by hero, athlete, card #, subset..."
+            value={cardSearch}
+            onChange={e => setCardSearch(e.target.value)}
+          />
+
+          <div style={{ maxHeight: 280, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8, marginBottom: 12 }}>
+            {cardInventory.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>No cards in inventory yet — add some via Card Inventory</div>
+            ) : filteredCardInventory.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>No cards match your search</div>
+            ) : filteredCardInventory.map((item, i) => {
+              const key = `${item.id}`;
+              const isPicked = !!pickedCards[key];
+              const availableQty = item.quantity - (pickedCards[key]?.qty || 0);
+              return (
+                <div key={i} onClick={() => pickCard(item)} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 14px", borderBottom: "1px solid #161616", cursor: availableQty > 0 ? "pointer" : "not-allowed",
+                  background: isPicked ? "#a78bfa11" : "transparent",
+                  opacity: availableQty <= 0 ? 0.4 : 1,
+                }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{item.subset}</span>
+                    <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{item.card_number}</span>
+                    <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{item.hero}</span>
+                    <span style={{ color: "#a78bfa", fontSize: 12 }}>{item.athlete}</span>
+                    {item.weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
+                    {item.variation && <span style={{ color: "#777", fontSize: 11 }}>{item.variation}</span>}
+                    {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)}</span>}
+                  </div>
+                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#555", whiteSpace: "nowrap", marginLeft: 8 }}>
+                    {availableQty > 0 ? `${availableQty} avail` : "Out of stock"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Picked cards summary */}
+          {Object.keys(pickedCards).length > 0 && (
+            <div style={{ border: "1px solid #1e1e1e", borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ padding: "8px 14px", background: "#0f0f0f", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px" }}>
+                Selected for this break
+              </div>
+              {Object.entries(pickedCards).map(([key, { item, qty }]) => (
+                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{item.subset}</span>
+                    <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{item.hero}</span>
+                    <span style={{ color: "#a78bfa", fontSize: 12 }}>{item.athlete}</span>
+                    {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)} ea</span>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => updateCardQty(key, qty - 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
+                    <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
+                    <button onClick={() => updateCardQty(key, qty + 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-          <button style={s.addBtn} onClick={() => setChasers(prev => [...prev, { type: "inventory", name: "", qty: 1, value: "" }])}>+ Add chaser</button>
+          )}
         </div>
 
         <div style={s.section}>
