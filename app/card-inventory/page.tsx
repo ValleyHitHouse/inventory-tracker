@@ -38,13 +38,15 @@ const subsetToInventoryId: Record<string, number> = {
 };
 
 export default function CardInventoryPage() {
-  const [view, setView] = useState<"inventory"|"intake">("inventory");
+  const [view, setView] = useState<"inventory"|"intake"|"lots">("inventory");
   const [giveawayTotal, setGiveawayTotal] = useState(0);
   const [inventory, setInventory] = useState<any[]>([]);
+  const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [lotName, setLotName] = useState("");
   const [giveawayCount, setGiveawayCount] = useState(0);
+  const [pricePerCard, setPricePerCard] = useState("");
   const [selectedSet, setSelectedSet] = useState(0);
   const [allCards, setAllCards] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
@@ -62,10 +64,12 @@ export default function CardInventoryPage() {
 
   async function loadInventory() {
     setLoading(true);
-    const { data: gt } = await supabase.from("GiveawayTotal").select("total").single();
+    const { data: gt } = await supabase.from("giveawaytotal").select("total").single();
     if (gt) setGiveawayTotal(gt.total);
-    const { data: inv } = await supabase.from("CardInventory").select("*").order("subset").order("created_at", { ascending: false });
+    const { data: inv } = await supabase.from("cardinventory").select("*").order("subset").order("created_at", { ascending: false });
     if (inv) setInventory(inv);
+    const { data: lotsData } = await supabase.from("cardlots").select("*").order("created_at", { ascending: false });
+    if (lotsData) setLots(lotsData);
     setLoading(false);
   }
 
@@ -94,17 +98,18 @@ export default function CardInventoryPage() {
     if (!lotName) return alert("Please enter a lot name!");
     setSaving(true);
 
-    await supabase.from("CardLots").insert({ lot_name: lotName, giveaway_count: giveawayCount });
+    await supabase.from("cardlots").insert({
+      lot_name: lotName,
+      giveaway_count: giveawayCount,
+      price_per_card: parseFloat(pricePerCard || "0"),
+    });
 
-    // Update giveaway total in CardInventory tracker
     if (giveawayCount > 0) {
-      await supabase.from("GiveawayTotal").update({ total: giveawayTotal + giveawayCount }).eq("id", 1);
-      // Also update main Inventory table
+      await supabase.from("giveawaytotal").update({ total: giveawayTotal + giveawayCount }).eq("id", 1);
       const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
       if (giv) await supabase.from("Inventory").update({ quantity: giv.quantity + giveawayCount }).eq("id", 1);
     }
 
-    // Save picked cards to CardInventory
     const rows = Object.values(picked).map(({ card, qty, subset }) => ({
       subset,
       card_number: card["Card #"],
@@ -115,14 +120,12 @@ export default function CardInventoryPage() {
       set_name: SETS[selectedSet].label,
       quantity: qty,
     }));
-    if (rows.length > 0) await supabase.from("CardInventory").insert(rows);
+    if (rows.length > 0) await supabase.from("cardinventory").insert(rows);
 
-    // Update main Inventory table counts by subset
     for (const subset of SUBSETS) {
       const totalForSubset = Object.values(picked)
         .filter(p => p.subset === subset)
         .reduce((sum, p) => sum + p.qty, 0);
-
       if (totalForSubset > 0) {
         const invId = subsetToInventoryId[subset];
         const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
@@ -133,7 +136,7 @@ export default function CardInventoryPage() {
     await loadInventory();
     setSaving(false);
     setView("inventory");
-    setLotName(""); setGiveawayCount(0); setPicked({}); setCardSearch("");
+    setLotName(""); setGiveawayCount(0); setPricePerCard(""); setPicked({}); setCardSearch("");
   }
 
   const s = {
@@ -145,6 +148,7 @@ export default function CardInventoryPage() {
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
     th: { padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" },
     td: { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
+    tabBtn: (active: boolean) => ({ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${active ? "#fb923c" : "#222"}`, background: active ? "#fb923c22" : "#111", color: active ? "#fb923c" : "#555" }),
   };
 
   const groupedInventory = SUBSETS.reduce((acc, sub) => {
@@ -152,6 +156,54 @@ export default function CardInventoryPage() {
     return acc;
   }, {} as Record<string, any[]>);
 
+  // LOTS VIEW
+  if (view === "lots") return (
+    <div style={s.shell}>
+      <div style={s.content}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Lot History</h1>
+            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>{lots.length} lots logged</p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setView("inventory")} style={s.tabBtn(false)}>← Back</button>
+            <button onClick={() => setView("intake")} style={s.submitBtn}>+ Log card lot</button>
+          </div>
+        </div>
+
+        {lots.length === 0 ? (
+          <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
+            <p style={{ color: "#555", fontSize: 13 }}>No lots logged yet.</p>
+          </div>
+        ) : (
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#0f0f0f" }}>
+                  <th style={s.th}>Lot name</th>
+                  <th style={s.th}>Giveaway cards</th>
+                  <th style={s.th}>Price per card</th>
+                  <th style={s.th}>Date logged</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lots.map((lot, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
+                    <td style={{ ...s.td, color: "#e5e5e5", fontWeight: 600 }}>{lot.lot_name}</td>
+                    <td style={{ ...s.td, color: "#4ade80" }}>{lot.giveaway_count}</td>
+                    <td style={{ ...s.td, color: "#fb923c" }}>{lot.price_per_card ? `$${parseFloat(lot.price_per_card).toFixed(2)}` : "—"}</td>
+                    <td style={{ ...s.td, color: "#555" }}>{new Date(lot.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // INTAKE VIEW
   if (view === "intake") return (
     <div style={s.shell}>
       <div style={s.content}>
@@ -165,7 +217,7 @@ export default function CardInventoryPage() {
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Lot details</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             <div>
               <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Lot name</label>
               <input style={s.input} placeholder="e.g. Griffey Lot - April 1" value={lotName} onChange={e => setLotName(e.target.value)} />
@@ -173,6 +225,10 @@ export default function CardInventoryPage() {
             <div>
               <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Giveaway cards in this lot</label>
               <input style={s.input} type="number" min={0} value={giveawayCount} onChange={e => setGiveawayCount(Number(e.target.value))} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Price per card ($)</label>
+              <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 2.50" value={pricePerCard} onChange={e => setPricePerCard(e.target.value)} />
             </div>
           </div>
         </div>
@@ -225,11 +281,7 @@ export default function CardInventoryPage() {
                     <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
                     <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
-                    {card.Weapon && (
-                      <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>
-                        {card.Weapon}
-                      </span>
-                    )}
+                    {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
                     {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
                     {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                   </div>
@@ -252,11 +304,7 @@ export default function CardInventoryPage() {
                   <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                   <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.Hero}</span>
                   <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
-                  {card.Weapon && (
-                    <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>
-                      {card.Weapon}
-                    </span>
-                  )}
+                  {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
                   {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
                   {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                 </div>
@@ -277,6 +325,7 @@ export default function CardInventoryPage() {
     </div>
   );
 
+  // INVENTORY VIEW
   return (
     <div style={s.shell}>
       <div style={s.content}>
@@ -285,7 +334,10 @@ export default function CardInventoryPage() {
             <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Card Inventory</h1>
             <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Track your BOBA card stock</p>
           </div>
-          <button onClick={() => setView("intake")} style={s.submitBtn}>+ Log card lot</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setView("lots")} style={s.tabBtn(false)}>📋 Lot history</button>
+            <button onClick={() => setView("intake")} style={s.submitBtn}>+ Log card lot</button>
+          </div>
         </div>
 
         <div style={{ ...s.section, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
