@@ -17,8 +17,15 @@ function parseCSV(text: string) {
   });
 }
 
+const SETS = [
+  { label: "Griffey", file: "/boba-checklist.csv", color: "#fb923c" },
+  { label: "Alpha", file: "/alpha-boba-checklist.csv", color: "#a78bfa" },
+  { label: "Alpha Update", file: "/alpha-update-boba-checklist.csv", color: "#38bdf8" },
+];
+
 export default function Cards() {
-  const [cards, setCards] = useState<any[]>([]);
+  const [activeSet, setActiveSet] = useState(0);
+  const [cardsBySet, setCardsBySet] = useState<Record<number, any[]>>({});
   const [search, setSearch] = useState("");
   const [filterSet, setFilterSet] = useState("All");
   const [filterWeapon, setFilterWeapon] = useState("All");
@@ -27,24 +34,28 @@ export default function Cards() {
   const [sortDir, setSortDir] = useState<"asc"|"desc">("asc");
 
   useEffect(() => {
-    fetch("/boba-checklist.csv")
+    setLoading(true);
+    setSearch("");
+    setFilterSet("All");
+    setFilterWeapon("All");
+    if (cardsBySet[activeSet]) { setLoading(false); return; }
+    fetch(SETS[activeSet].file)
       .then(r => r.text())
       .then(text => {
-        setCards(parseCSV(text));
+        setCardsBySet(prev => ({ ...prev, [activeSet]: parseCSV(text) }));
         setLoading(false);
       });
-  }, []);
+  }, [activeSet]);
+
+  const cards = cardsBySet[activeSet] || [];
+  const activeColor = SETS[activeSet].color;
 
   function handleSort(col: string) {
-    if (sortCol === col) {
-      setSortDir(d => d === "asc" ? "desc" : "asc");
-    } else {
-      setSortCol(col);
-      setSortDir("asc");
-    }
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
   }
 
-  const sets = ["All", ...Array.from(new Set(cards.map(c => c.Treatment).filter(Boolean))).sort()];
+  const treatments = ["All", ...Array.from(new Set(cards.map(c => c.Treatment).filter(Boolean))).sort()];
   const weapons = ["All", ...Array.from(new Set(cards.map(c => c.Weapon).filter(Boolean))).sort()];
 
   const filtered = cards.filter(c => {
@@ -62,11 +73,7 @@ export default function Cards() {
   const sorted = [...filtered].sort((a, b) => {
     let aVal = a[sortCol] ?? "";
     let bVal = b[sortCol] ?? "";
-    // Numeric sort for Power
-    if (sortCol === "Power") {
-      return sortDir === "asc" ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal);
-    }
-    // Card # sort — handle P-1, 1, 10 etc
+    if (sortCol === "Power") return sortDir === "asc" ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal);
     if (sortCol === "Card #") {
       const parse = (v: string) => {
         const n = parseInt(v.replace(/\D/g, ""));
@@ -74,9 +81,7 @@ export default function Cards() {
       };
       return sortDir === "asc" ? parse(aVal) - parse(bVal) : parse(bVal) - parse(aVal);
     }
-    return sortDir === "asc"
-      ? aVal.localeCompare(bVal)
-      : bVal.localeCompare(aVal);
+    return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
   });
 
   const weaponColors: Record<string, string> = {
@@ -95,14 +100,11 @@ export default function Cards() {
   function SortTh({ col, label }: { col: string; label: string }) {
     const active = sortCol === col;
     return (
-      <th
-        onClick={() => handleSort(col)}
-        style={{
-          padding: "10px 14px", textAlign: "left", color: active ? "#fb923c" : "#444",
-          fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px",
-          borderBottom: "1px solid #1e1e1e", cursor: "pointer", userSelect: "none",
-          whiteSpace: "nowrap"
-        }}>
+      <th onClick={() => handleSort(col)} style={{
+        padding: "10px 14px", textAlign: "left", color: active ? activeColor : "#444",
+        fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px",
+        borderBottom: "1px solid #1e1e1e", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap"
+      }}>
         {label} {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
       </th>
     );
@@ -111,6 +113,7 @@ export default function Cards() {
   return (
     <div style={s.shell}>
       <div style={s.content}>
+        {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Bo Jackson Battle Arena</h1>
           <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
@@ -118,6 +121,21 @@ export default function Cards() {
           </p>
         </div>
 
+        {/* Set switcher */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+          {SETS.map((set, i) => (
+            <button key={i} onClick={() => setActiveSet(i)} style={{
+              padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${activeSet === i ? set.color : "#222"}`,
+              background: activeSet === i ? set.color + "22" : "#111",
+              color: activeSet === i ? set.color : "#555",
+            }}>
+              {set.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filters */}
         <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
           <input
             style={{ ...s.input, flex: 1, minWidth: 200 }}
@@ -126,13 +144,14 @@ export default function Cards() {
             onChange={e => setSearch(e.target.value)}
           />
           <select style={s.select} value={filterSet} onChange={e => setFilterSet(e.target.value)}>
-            {sets.map(s => <option key={s} value={s}>{s === "All" ? "All sets" : s}</option>)}
+            {treatments.map(t => <option key={t} value={t}>{t === "All" ? "All sets" : t}</option>)}
           </select>
           <select style={s.select} value={filterWeapon} onChange={e => setFilterWeapon(e.target.value)}>
             {weapons.map(w => <option key={w} value={w}>{w === "All" ? "All weapons" : w}</option>)}
           </select>
         </div>
 
+        {/* Table */}
         {loading ? (
           <p style={{ color: "#555" }}>Loading checklist...</p>
         ) : (
@@ -155,7 +174,7 @@ export default function Cards() {
                     <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
                       <td style={{ ...s.td, color: "#555", fontFamily: "monospace" }}>{c["Card #"]}</td>
                       <td style={{ ...s.td, color: "#e5e5e5", fontWeight: 600 }}>{c.Hero}</td>
-                      <td style={{ ...s.td, color: "#a78bfa" }}>{c["Athlete Inspiration"]}</td>
+                      <td style={{ ...s.td, color: activeColor }}>{c["Athlete Inspiration"]}</td>
                       <td style={{ ...s.td, color: "#777" }}>{c.Variation}</td>
                       <td style={{ ...s.td, color: "#555", fontSize: 12 }}>{c.Treatment}</td>
                       <td style={{ ...s.td }}>
