@@ -87,16 +87,12 @@ export default function Breaks() {
     setSupplies([{ name: "Bubble mailers", qty: 1 }]);
   }
 
-  const s = { shell: { fontFamily: "sans-serif", background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }, topbar: { background: "#111", borderBottom: "1px solid #1e1e1e", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 52 }, content: { padding: 24, maxWidth: 800, margin: "0 auto" }, section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 }, sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 }, label: { fontSize: 12, color: "#666", marginBottom: 5, display: "block" }, input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" }, row: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }, addBtn: { fontSize: 12, color: "#a78bfa", background: "none", border: "1px dashed #333", borderRadius: 6, padding: "7px 12px", cursor: "pointer", width: "100%", marginTop: 4 }, removeBtn: { background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, padding: "0 4px" }, submitBtn: { width: "100%", background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", marginTop: 4 }, stat: { background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px" }, statLabel: { fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: ".4px" }, statValue: { fontSize: 20, fontWeight: 700 } };
+  const s = { shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }, content: { padding: 24, maxWidth: 800, margin: "0 auto" }, section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 }, sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 }, label: { fontSize: 12, color: "#666", marginBottom: 5, display: "block" }, input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" }, row: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }, addBtn: { fontSize: 12, color: "#a78bfa", background: "none", border: "1px dashed #333", borderRadius: 6, padding: "7px 12px", cursor: "pointer", width: "100%", marginTop: 4 }, removeBtn: { background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, padding: "0 4px" }, submitBtn: { width: "100%", background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", marginTop: 4 }, stat: { background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px" }, statLabel: { fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: ".4px" }, statValue: { fontSize: 20, fontWeight: 700 } };
 
   if (view === "list") return (
     <div style={s.shell}>
-      <div style={s.topbar}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#fb923c" }}>ValleyHitHouse</span>
-        <a href="/" style={{ fontSize: 12, color: "#555", textDecoration: "none" }}>← Inventory</a>
-      </div>
       <div style={s.content}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingTop: 24 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Break results</h1>
             <p style={{ fontSize: 13, color: "#555" }}>{breaks.length} breaks logged</p>
@@ -135,12 +131,8 @@ export default function Breaks() {
 
   return (
     <div style={s.shell}>
-      <div style={s.topbar}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#fb923c" }}>ValleyHitHouse</span>
-        <button onClick={() => setView("list")} style={{ fontSize: 12, color: "#555", background: "none", border: "none", cursor: "pointer" }}>← Back to breaks</button>
-      </div>
       <div style={s.content}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Log new break</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, paddingTop: 24 }}>Log new break</h1>
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Break details</div>
