@@ -9,17 +9,28 @@ export default function Customers() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      // Pull orders and breaks separately then combine
+      const { data: orders } = await supabase
         .from("BreakOrders")
-        .select("buyer_username, shipping_address, price, break_id, Breaks(date)")
+        .select("buyer_username, shipping_address, price, break_id")
         .eq("cancelled", false)
         .gt("price", 0);
 
-      if (!data) return;
+      const { data: breaks } = await supabase
+        .from("Breaks")
+        .select("id, date");
+
+      if (!orders) return;
+
+      // Build a map of break_id -> date
+      const breakDateMap: Record<number, string> = {};
+      for (const b of breaks || []) {
+        breakDateMap[b.id] = b.date;
+      }
 
       // Group by buyer username
       const map: Record<string, any> = {};
-      for (const order of data) {
+      for (const order of orders) {
         const key = order.buyer_username;
         if (!key) continue;
         if (!map[key]) {
@@ -33,7 +44,7 @@ export default function Customers() {
         }
         map[key].total_spent += parseFloat(order.price || "0");
         map[key].order_count += 1;
-        const breakDate = (order.Breaks as any)?.date;
+        const breakDate = breakDateMap[order.break_id];
         if (breakDate && (!map[key].last_break_date || breakDate > map[key].last_break_date)) {
           map[key].last_break_date = breakDate;
         }
@@ -62,7 +73,6 @@ export default function Customers() {
   return (
     <div style={s.shell}>
       <div style={s.content}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Customers</h1>
@@ -78,7 +88,6 @@ export default function Customers() {
           />
         </div>
 
-        {/* Table */}
         {loading ? (
           <p style={{ color: "#555" }}>Loading customers...</p>
         ) : filtered.length === 0 ? (
