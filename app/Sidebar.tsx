@@ -26,9 +26,9 @@ function NavLink({ href, emoji, label, soon }: { href: string; emoji: string; la
 export default function Sidebar() {
   return (
     <div style={{ width: 220, background: "#111", borderRight: "1px solid #1e1e1e", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100 }}>
-      <div style={{ padding: "24px 20px 20px", borderBottom: "1px solid #1e1e1e" }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#fb923c", letterSpacing: "-0.5px" }}>ValleyHitHouse</div>
-        <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>Dashboard</div>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <img src="/LOGO-BG.png" alt="ValleyHitHouse" style={{ width: 140, height: "auto" }} />
+        <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>Dashboard</div>
       </div>
       <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
         <NavLink href="/" emoji="🏠" label="Home" />
