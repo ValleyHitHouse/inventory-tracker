@@ -86,9 +86,32 @@ export default function Breaks() {
     }).select().single();
 
     if (brk) {
-      if (chasers.length) await supabase.from("BreakChasers").insert(chasers.map(c => ({ break_id: brk.id, name: c.name, type: c.type, quantity: c.qty, value: parseFloat(c.value || "0") })));
-      if (supplies.length) await supabase.from("BreakSupplies").insert(supplies.map(s => ({ break_id: brk.id, supply_name: s.name, quantity_used: s.qty })));
-      if (csvData.length) await supabase.from("BreakOrders").insert(csvData.map(r => ({ break_id: brk.id, order_id: r.order_id, buyer_username: r.buyer_username, product_name: r.product_name, price: parseFloat(r.original_item_price || "0"), placed_at: r.placed_at, cancelled: r.cancelled_or_failed === "True", tracking_code: r.tracking_code, shipping_address: r.shipping_address, postal_code: r.postal_code })));
+      if (chasers.length) {
+        await supabase.from("BreakChasers").insert(
+          chasers.map(c => ({ break_id: brk.id, name: c.name, type: c.type, quantity: c.qty, value: parseFloat(c.value || "0") }))
+        );
+      }
+      if (supplies.length) {
+        await supabase.from("BreakSupplies").insert(
+          supplies.map(s => ({ break_id: brk.id, supply_name: s.name, quantity_used: s.qty }))
+        );
+      }
+      if (csvData.length) {
+        const orderRows = csvData.map(r => ({
+          break_id: brk.id,
+          order_id: r.order_id || null,
+          buyer_username: r.buyer_username || null,
+          product_name: r.product_name || null,
+          price: parseFloat(r.original_item_price || "0"),
+          placed_at: r.placed_at ? r.placed_at.trim() : null,
+          cancelled: r.cancelled_or_failed === "True",
+          tracking_code: r.tracking_code || null,
+          shipping_address: r.shipping_address || null,
+          postal_code: r.postal_code || null,
+        }));
+        const { error: ordersError } = await supabase.from("BreakOrders").insert(orderRows);
+        if (ordersError) console.error("BreakOrders insert error:", ordersError);
+      }
       for (const s of supplies) {
         const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("name", s.name).single();
         if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - s.qty) }).eq("id", inv.id);
