@@ -43,6 +43,8 @@ export default function CardInventoryPage() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingLotId, setDeletingLotId] = useState<number | null>(null);
+  const [confirmLotId, setConfirmLotId] = useState<number | null>(null);
 
   const [lotName, setLotName] = useState("");
   const [giveawayCount, setGiveawayCount] = useState(0);
@@ -98,6 +100,19 @@ export default function CardInventoryPage() {
     setPicked(prev => ({ ...prev, [key]: { ...prev[key], pricePaid: price } }));
   }
 
+  async function deleteLot(lot: any) {
+    setDeletingLotId(lot.id);
+    if (lot.giveaway_count > 0) {
+      await supabase.from("giveawaytotal").update({ total: Math.max(0, giveawayTotal - lot.giveaway_count) }).eq("id", 1);
+      const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
+      if (giv) await supabase.from("Inventory").update({ quantity: Math.max(0, giv.quantity - lot.giveaway_count) }).eq("id", 1);
+    }
+    await supabase.from("cardlots").delete().eq("id", lot.id);
+    setDeletingLotId(null);
+    setConfirmLotId(null);
+    loadInventory();
+  }
+
   async function saveIntake() {
     if (!lotName) return alert("Please enter a lot name!");
     setSaving(true);
@@ -150,7 +165,7 @@ export default function CardInventoryPage() {
     section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
     input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" },
-    smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "#e5e5e5", outline: "none", width: 80 },
+    smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "#e5e5e5", outline: "none", width: 90 },
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
     th: { padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" },
     td: { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
@@ -189,6 +204,7 @@ export default function CardInventoryPage() {
                   <th style={s.th}>Giveaway cards</th>
                   <th style={s.th}>Giveaway total price</th>
                   <th style={s.th}>Date logged</th>
+                  <th style={s.th}></th>
                 </tr>
               </thead>
               <tbody>
@@ -198,6 +214,29 @@ export default function CardInventoryPage() {
                     <td style={{ ...s.td, color: "#4ade80" }}>{lot.giveaway_count}</td>
                     <td style={{ ...s.td, color: "#fb923c" }}>{lot.price_per_card ? `$${parseFloat(lot.price_per_card).toFixed(2)}` : "—"}</td>
                     <td style={{ ...s.td, color: "#555" }}>{new Date(lot.created_at).toLocaleDateString()}</td>
+                    <td style={{ ...s.td }}>
+                      {confirmLotId === lot.id ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() => deleteLot(lot)}
+                            disabled={deletingLotId === lot.id}
+                            style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                            {deletingLotId === lot.id ? "Deleting..." : "Confirm"}
+                          </button>
+                          <button
+                            onClick={() => setConfirmLotId(null)}
+                            style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmLotId(lot.id)}
+                          style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                          Delete
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -299,7 +338,6 @@ export default function CardInventoryPage() {
           </div>
         </div>
 
-        {/* Picked cards with price per card */}
         {Object.keys(picked).length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Cards in this lot — enter price paid per card</div>
@@ -325,7 +363,7 @@ export default function CardInventoryPage() {
                       value={pricePaid}
                       onClick={e => e.stopPropagation()}
                       onChange={e => { e.stopPropagation(); updatePrice(key, e.target.value); }}
-                      style={{ ...s.smallInput, width: 90 }}
+                      style={s.smallInput}
                     />
                     <span style={{ fontSize: 11, color: "#555" }}>each</span>
                   </div>
@@ -337,8 +375,6 @@ export default function CardInventoryPage() {
                 </div>
               </div>
             ))}
-
-            {/* Total cost summary */}
             <div style={{ marginTop: 16, padding: "12px 16px", background: "#0f0f0f", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#555" }}>Total cost this lot</span>
               <span style={{ fontSize: 18, fontWeight: 700, color: "#fb923c" }}>
