@@ -173,7 +173,7 @@ export default function CardInventoryPage() {
   };
 
   const groupedInventory = SUBSETS.reduce((acc, sub) => {
-    acc[sub] = inventory.filter(i => i.subset === sub);
+acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
     return acc;
   }, {} as Record<string, any[]>);
 
