@@ -37,7 +37,6 @@ export default function CardInventoryPage() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Intake form state
   const [lotName, setLotName] = useState("");
   const [giveawayCount, setGiveawayCount] = useState(0);
   const [selectedSet, setSelectedSet] = useState(0);
@@ -66,11 +65,11 @@ export default function CardInventoryPage() {
 
   const filteredCards = allCards.filter(c => {
     const q = cardSearch.toLowerCase();
-    return !q || c.Hero?.toLowerCase().includes(q) || c["Athlete Inspiration"]?.toLowerCase().includes(q) || c["Card #"]?.toLowerCase().includes(q) || c.Variation?.toLowerCase().includes(q);
+    return !q || c.Hero?.toLowerCase().includes(q) || c["Athlete Inspiration"]?.toLowerCase().includes(q) || c["Card #"]?.toLowerCase().includes(q) || c.Treatment?.toLowerCase().includes(q);
   }).slice(0, 50);
 
   function pickCard(card: any) {
-    const key = `${card["Card #"]}-${card.Weapon}-${activeSubset}`;
+    const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
     setPicked(prev => ({
       ...prev,
       [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, subset: activeSubset }
@@ -100,7 +99,7 @@ export default function CardInventoryPage() {
       card_number: card["Card #"],
       hero: card.Hero,
       athlete: card["Athlete Inspiration"],
-      variation: card.Variation,
+      variation: card.Treatment,
       weapon: card.Weapon,
       set_name: SETS[selectedSet].label,
       quantity: qty,
@@ -140,7 +139,6 @@ export default function CardInventoryPage() {
           <button onClick={() => setView("inventory")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
 
-        {/* Lot details */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Lot details</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -155,11 +153,9 @@ export default function CardInventoryPage() {
           </div>
         </div>
 
-        {/* Card picker */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Add specific cards</div>
 
-          {/* Set selector */}
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
             {SETS.map((set, i) => (
               <button key={i} onClick={() => setSelectedSet(i)} style={{
@@ -171,7 +167,6 @@ export default function CardInventoryPage() {
             ))}
           </div>
 
-          {/* Subset selector */}
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
             {SUBSETS.map(sub => (
               <button key={sub} onClick={() => setActiveSubset(sub)} style={{
@@ -183,20 +178,18 @@ export default function CardInventoryPage() {
             ))}
           </div>
 
-          {/* Search */}
           <input
             style={{ ...s.input, marginBottom: 12 }}
-            placeholder="🔍 Search by hero, athlete, card #, variation..."
+            placeholder="🔍 Search by hero, athlete, card #, treatment..."
             value={cardSearch}
             onChange={e => setCardSearch(e.target.value)}
           />
 
-          {/* Card results */}
           <div style={{ maxHeight: 320, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8 }}>
             {filteredCards.length === 0 ? (
               <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>Type to search cards</div>
             ) : filteredCards.map((card, i) => {
-              const key = `${card["Card #"]}-${card.Weapon}-${activeSubset}`;
+              const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
               const isPicked = !!picked[key];
               return (
                 <div key={i} onClick={() => pickCard(card)} style={{
@@ -213,7 +206,7 @@ export default function CardInventoryPage() {
                         {card.Weapon}
                       </span>
                     )}
-                    {card.Variation && <span style={{ color: "#777", fontSize: 11 }}>{card.Variation}</span>}
+                    {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
                     {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                   </div>
                   <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8 }}>
@@ -225,7 +218,6 @@ export default function CardInventoryPage() {
           </div>
         </div>
 
-        {/* Picked cards summary */}
         {Object.keys(picked).length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Cards in this lot ({Object.keys(picked).length})</div>
@@ -241,13 +233,13 @@ export default function CardInventoryPage() {
                       {card.Weapon}
                     </span>
                   )}
-                  {card.Variation && <span style={{ color: "#777", fontSize: 11 }}>{card.Variation}</span>}
+                  {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
                   {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
-                  <button onClick={() => updateQty(key, qty - 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
+                  <button onClick={e => { e.stopPropagation(); updateQty(key, qty - 1); }} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
                   <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
-                  <button onClick={() => updateQty(key, qty + 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
+                  <button onClick={e => { e.stopPropagation(); updateQty(key, qty + 1); }} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
                 </div>
               </div>
             ))}
@@ -261,7 +253,6 @@ export default function CardInventoryPage() {
     </div>
   );
 
-  // Inventory view
   return (
     <div style={s.shell}>
       <div style={s.content}>
@@ -273,7 +264,6 @@ export default function CardInventoryPage() {
           <button onClick={() => setView("intake")} style={s.submitBtn}>+ Log card lot</button>
         </div>
 
-        {/* Giveaway total */}
         <div style={{ ...s.section, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Total giveaway cards</div>
@@ -282,7 +272,6 @@ export default function CardInventoryPage() {
           <div style={{ fontSize: 12, color: "#333" }}>Running total across all lots</div>
         </div>
 
-        {/* Subsets */}
         {loading ? <p style={{ color: "#555" }}>Loading...</p> : SUBSETS.map(sub => (
           <div key={sub} style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -303,7 +292,7 @@ export default function CardInventoryPage() {
                       <th style={s.th}>#</th>
                       <th style={s.th}>Hero</th>
                       <th style={s.th}>Athlete</th>
-                      <th style={s.th}>Variation</th>
+                      <th style={s.th}>Treatment</th>
                       <th style={s.th}>Set</th>
                       <th style={s.th}>Weapon</th>
                       <th style={s.th}>Power</th>
@@ -326,7 +315,7 @@ export default function CardInventoryPage() {
                           )}
                         </td>
                         <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.power}</td>
-                        <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.quantity}</td>
+                        <td style={{ ...s.td, color: "#fb923c", fontWeight: 600 }}>{item.quantity}</td>
                       </tr>
                     ))}
                   </tbody>
