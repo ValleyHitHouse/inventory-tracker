@@ -23,6 +23,8 @@ export default function Cards() {
   const [filterSet, setFilterSet] = useState("All");
   const [filterWeapon, setFilterWeapon] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [sortCol, setSortCol] = useState("Card #");
+  const [sortDir, setSortDir] = useState<"asc"|"desc">("asc");
 
   useEffect(() => {
     fetch("/boba-checklist.csv")
@@ -32,6 +34,15 @@ export default function Cards() {
         setLoading(false);
       });
   }, []);
+
+  function handleSort(col: string) {
+    if (sortCol === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
 
   const sets = ["All", ...Array.from(new Set(cards.map(c => c.Treatment).filter(Boolean))).sort()];
   const weapons = ["All", ...Array.from(new Set(cards.map(c => c.Weapon).filter(Boolean))).sort()];
@@ -48,6 +59,26 @@ export default function Cards() {
     return matchSearch && matchSet && matchWeapon;
   });
 
+  const sorted = [...filtered].sort((a, b) => {
+    let aVal = a[sortCol] ?? "";
+    let bVal = b[sortCol] ?? "";
+    // Numeric sort for Power
+    if (sortCol === "Power") {
+      return sortDir === "asc" ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal);
+    }
+    // Card # sort — handle P-1, 1, 10 etc
+    if (sortCol === "Card #") {
+      const parse = (v: string) => {
+        const n = parseInt(v.replace(/\D/g, ""));
+        return isNaN(n) ? 9999 : n + (v.startsWith("P") ? 10000 : 0);
+      };
+      return sortDir === "asc" ? parse(aVal) - parse(bVal) : parse(bVal) - parse(aVal);
+    }
+    return sortDir === "asc"
+      ? aVal.localeCompare(bVal)
+      : bVal.localeCompare(aVal);
+  });
+
   const weaponColors: Record<string, string> = {
     Fire: "#fb923c", Ice: "#38bdf8", Steel: "#94a3b8",
     Gum: "#f472b6", Hex: "#a78bfa", Glow: "#4ade80", Brawl: "#f87171"
@@ -58,14 +89,28 @@ export default function Cards() {
     content: { padding: 32, maxWidth: 1100, margin: "0 auto" },
     input: { background: "#111", border: "1px solid #222", borderRadius: 8, padding: "9px 14px", fontSize: 13, color: "#e5e5e5", outline: "none" },
     select: { background: "#111", border: "1px solid #222", borderRadius: 8, padding: "9px 14px", fontSize: 13, color: "#e5e5e5", outline: "none", cursor: "pointer" },
-    th: { padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" },
     td: { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
   };
+
+  function SortTh({ col, label }: { col: string; label: string }) {
+    const active = sortCol === col;
+    return (
+      <th
+        onClick={() => handleSort(col)}
+        style={{
+          padding: "10px 14px", textAlign: "left", color: active ? "#fb923c" : "#444",
+          fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px",
+          borderBottom: "1px solid #1e1e1e", cursor: "pointer", userSelect: "none",
+          whiteSpace: "nowrap"
+        }}>
+        {label} {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+      </th>
+    );
+  }
 
   return (
     <div style={s.shell}>
       <div style={s.content}>
-        {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Bo Jackson Battle Arena</h1>
           <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
@@ -73,7 +118,6 @@ export default function Cards() {
           </p>
         </div>
 
-        {/* Filters */}
         <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
           <input
             style={{ ...s.input, flex: 1, minWidth: 200 }}
@@ -89,7 +133,6 @@ export default function Cards() {
           </select>
         </div>
 
-        {/* Table */}
         {loading ? (
           <p style={{ color: "#555" }}>Loading checklist...</p>
         ) : (
@@ -98,17 +141,17 @@ export default function Cards() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                   <tr style={{ background: "#0f0f0f" }}>
-                    <th style={s.th}>#</th>
-                    <th style={s.th}>Hero</th>
-                    <th style={s.th}>Athlete</th>
-                    <th style={s.th}>Variation</th>
-                    <th style={s.th}>Set</th>
-                    <th style={s.th}>Weapon</th>
-                    <th style={s.th}>Power</th>
+                    <SortTh col="Card #" label="#" />
+                    <SortTh col="Hero" label="Hero" />
+                    <SortTh col="Athlete Inspiration" label="Athlete" />
+                    <SortTh col="Variation" label="Variation" />
+                    <SortTh col="Treatment" label="Set" />
+                    <SortTh col="Weapon" label="Weapon" />
+                    <SortTh col="Power" label="Power" />
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.slice(0, 500).map((c, i) => (
+                  {sorted.slice(0, 500).map((c, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
                       <td style={{ ...s.td, color: "#555", fontFamily: "monospace" }}>{c["Card #"]}</td>
                       <td style={{ ...s.td, color: "#e5e5e5", fontWeight: 600 }}>{c.Hero}</td>
