@@ -32,12 +32,28 @@ export default function Breaks() {
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvName, setCsvName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
 
   useEffect(() => {
-    supabase.from("Breaks").select("*").order("date", { ascending: false }).then(({ data }) => {
-      if (data) setBreaks(data);
-    });
+    loadBreaks();
   }, []);
+
+  async function loadBreaks() {
+    const { data } = await supabase.from("Breaks").select("*").order("date", { ascending: false });
+    if (data) setBreaks(data);
+  }
+
+  async function deleteBreak(id: number) {
+    setDeletingId(id);
+    await supabase.from("BreakOrders").delete().eq("break_id", id);
+    await supabase.from("BreakChasers").delete().eq("break_id", id);
+    await supabase.from("BreakSupplies").delete().eq("break_id", id);
+    await supabase.from("Breaks").delete().eq("id", id);
+    setDeletingId(null);
+    setConfirmId(null);
+    loadBreaks();
+  }
 
   const revenue = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
@@ -78,8 +94,7 @@ export default function Breaks() {
         if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - s.qty) }).eq("id", inv.id);
       }
     }
-    const { data } = await supabase.from("Breaks").select("*").order("date", { ascending: false });
-    if (data) setBreaks(data);
+    await loadBreaks();
     setSaving(false);
     setView("list");
     setCsvData([]); setCsvName(""); setBoxName(""); setBoxValue(""); setNumBoxes(1);
@@ -107,7 +122,7 @@ export default function Breaks() {
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead><tr style={{ background: "#0f0f0f" }}>
-                {["Date","Box","Boxes","Spots","Revenue","Cost","Net profit"].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>)}
+                {["Date","Box","Boxes","Spots","Revenue","Cost","Net profit",""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {breaks.map(b => (
@@ -119,6 +134,29 @@ export default function Breaks() {
                     <td style={{ padding: "10px 14px", color: "#4ade80" }}>${b.revenue?.toFixed(2)}</td>
                     <td style={{ padding: "10px 14px", color: "#fb923c" }}>${b.box_value?.toFixed(2)}</td>
                     <td style={{ padding: "10px 14px", color: b.net_profit >= 0 ? "#a78bfa" : "#f87171", fontWeight: 600 }}>${b.net_profit?.toFixed(2)}</td>
+                    <td style={{ padding: "10px 14px" }}>
+                      {confirmId === b.id ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() => deleteBreak(b.id)}
+                            disabled={deletingId === b.id}
+                            style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                            {deletingId === b.id ? "Deleting..." : "Confirm"}
+                          </button>
+                          <button
+                            onClick={() => setConfirmId(null)}
+                            style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmId(b.id)}
+                          style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                          Delete
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
