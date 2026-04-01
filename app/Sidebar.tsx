@@ -35,7 +35,7 @@ export default function Sidebar() {
         <NavLink href="/inventory" emoji="📦" label="Inventory" />
         <NavLink href="/breaks" emoji="🎴" label="Breaks" />
         <NavLink href="/orders" emoji="📋" label="Orders" soon />
-        <NavLink href="/customers" emoji="👥" label="Customers" soon />
+        <NavLink href="/customers" emoji="👥" label="Customers" />
         <NavLink href="/sales" emoji="📈" label="Sales" soon />
         <NavLink href="/analytics" emoji="📊" label="Analytics" soon />
       </nav>
