@@ -31,6 +31,12 @@ const weaponColors: Record<string, string> = {
   Gum: "#f472b6", Hex: "#a78bfa", Glow: "#4ade80", Brawl: "#f87171"
 };
 
+const subsetToInventoryId: Record<string, number> = {
+  "Chasers": 4,
+  "Insurance": 3,
+  "First Timers": 2,
+};
+
 export default function CardInventoryPage() {
   const [view, setView] = useState<"inventory"|"intake">("inventory");
   const [giveawayTotal, setGiveawayTotal] = useState(0);
@@ -90,10 +96,15 @@ export default function CardInventoryPage() {
 
     await supabase.from("CardLots").insert({ lot_name: lotName, giveaway_count: giveawayCount });
 
+    // Update giveaway total in CardInventory tracker
     if (giveawayCount > 0) {
       await supabase.from("GiveawayTotal").update({ total: giveawayTotal + giveawayCount }).eq("id", 1);
+      // Also update main Inventory table
+      const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
+      if (giv) await supabase.from("Inventory").update({ quantity: giv.quantity + giveawayCount }).eq("id", 1);
     }
 
+    // Save picked cards to CardInventory
     const rows = Object.values(picked).map(({ card, qty, subset }) => ({
       subset,
       card_number: card["Card #"],
@@ -105,6 +116,19 @@ export default function CardInventoryPage() {
       quantity: qty,
     }));
     if (rows.length > 0) await supabase.from("CardInventory").insert(rows);
+
+    // Update main Inventory table counts by subset
+    for (const subset of SUBSETS) {
+      const totalForSubset = Object.values(picked)
+        .filter(p => p.subset === subset)
+        .reduce((sum, p) => sum + p.qty, 0);
+
+      if (totalForSubset > 0) {
+        const invId = subsetToInventoryId[subset];
+        const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
+        if (inv) await supabase.from("Inventory").update({ quantity: inv.quantity + totalForSubset }).eq("id", invId);
+      }
+    }
 
     await loadInventory();
     setSaving(false);
