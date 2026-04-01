@@ -155,7 +155,13 @@ for (const { item, qty } of Object.values(pickedCards)) {
           }
         }
       }
-
+// Deduct giveaway cards used in this break
+if (freeGiveaways > 0) {
+  const { data: gt } = await supabase.from("giveawaytotal").select("total").single();
+  if (gt) await supabase.from("giveawaytotal").update({ total: Math.max(0, gt.total - freeGiveaways) }).eq("id", 1);
+  const { data: givInv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
+  if (givInv) await supabase.from("Inventory").update({ quantity: Math.max(0, givInv.quantity - freeGiveaways) }).eq("id", 1);
+}
       if (supplies.length) {
         await supabase.from("BreakSupplies").insert(
           supplies.map(s => ({ break_id: brk.id, supply_name: s.name, quantity_used: s.qty }))
