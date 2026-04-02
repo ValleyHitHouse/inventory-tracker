@@ -7,9 +7,9 @@ const IMC_SPLIT = 0.70;
 const VALLEY_SPLIT = 0.30;
 
 // Supplies covered by IMC (70/30 split)
-const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "Bubble mailers", "Boxes (S)", "Boxes (M)", "Boxes (L)"];
+const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "Bubble mailers", "Boxes (S)", "Boxes (M)", "Boxes (L)", "MagPros"];
 // Supplies Valley pays alone
-const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "MagPros", "Shipping labels", "Packing tape", "Packing paper"];
+const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "Shipping labels", "Packing tape", "Packing paper"];
 
 function parseCSV(text: string) {
   const lines = text.trim().split("\n");
@@ -175,9 +175,9 @@ export default function Breaks() {
     return (inventoryPrices[name] || 0) * qty;
   }
 
-  const imcSupplyCost = Object.entries(allEstimates).filter(([name]) => IMC_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
-  const valleySupplyCost = Object.entries(allEstimates).filter(([name]) => VALLEY_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
-  const totalSupplyCost = imcSupplyCost + valleySupplyCost;
+  const magProsCost = getSupplyCost("MagPros", parseInt(magPros || "0"));
+const imcSupplyCost = Object.entries(allEstimates).filter(([name]) => IMC_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0) + magProsCost;
+const valleySupplyCost = Object.entries(allEstimates).filter(([name]) => VALLEY_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
 
   // Giveaway card cost (Valley only)
 const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record<string, number>)["Giveaway cards"] || 0);
