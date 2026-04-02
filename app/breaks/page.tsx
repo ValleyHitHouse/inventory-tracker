@@ -6,9 +6,7 @@ const WHATNOT_FEE = 0.112;
 const IMC_SPLIT = 0.70;
 const VALLEY_SPLIT = 0.30;
 
-// Supplies covered by IMC (70/30 split)
 const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "Bubble mailers", "Boxes (S)", "Boxes (M)", "Boxes (L)", "MagPros"];
-// Supplies Valley pays alone
 const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "Shipping labels", "Packing tape", "Packing paper"];
 
 function parseCSV(text: string) {
@@ -86,7 +84,6 @@ export default function Breaks() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [boxName, setBoxName] = useState("");
   const [numBoxes, setNumBoxes] = useState(1);
-  const [boxValue, setBoxValue] = useState("");
   const [promotionTotal, setPromotionTotal] = useState("");
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvName, setCsvName] = useState("");
@@ -135,7 +132,6 @@ export default function Breaks() {
     if (data) {
       const prices: Record<string, number> = {};
       for (const item of data) {
-        // Parse cost string like "$0.24" or "$2.00"
         const num = parseFloat((item.cost || "0").replace(/[^0-9.]/g, ""));
         if (!isNaN(num)) prices[item.name] = num;
       }
@@ -168,19 +164,25 @@ export default function Breaks() {
   const insuranceCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Insurance").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const firstTimerCost = Object.values(pickedCards).filter(({ item }) => item.subset === "First Timers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
 
-  // Supply costs
-  const allEstimates = { ...editedEstimates, ...(magPros ? { "MagPros": parseInt(magPros) } : {}) };
+  // Supply costs — using editedEstimates + magPros combined
+  const allEstimates: Record<string, number> = { ...editedEstimates, ...(magPros ? { "MagPros": parseInt(magPros) } : {}) };
 
   function getSupplyCost(name: string, qty: number): number {
     return (inventoryPrices[name] || 0) * qty;
   }
 
-  const magProsCost = getSupplyCost("MagPros", parseInt(magPros || "0"));
-const imcSupplyCost = Object.entries(allEstimates).filter(([name]) => IMC_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0) + magProsCost;
-const valleySupplyCost = Object.entries(allEstimates).filter(([name]) => VALLEY_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
+  // IMC supplies cost (includes MagPros via allEstimates)
+  const imcSupplyCost = Object.entries(allEstimates)
+    .filter(([name]) => IMC_SUPPLIES.includes(name))
+    .reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
+
+  // Valley supplies cost (stickers etc)
+  const valleySupplyCost = Object.entries(allEstimates)
+    .filter(([name]) => VALLEY_SUPPLIES.includes(name))
+    .reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
 
   // Giveaway card cost (Valley only)
-const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record<string, number>)["Giveaway cards"] || 0);
+  const giveawayCardCost = getSupplyCost("Giveaway cards", allEstimates["Giveaway cards"] || 0);
 
   // Shared expenses (IMC 70% / Valley 30%)
   const sharedExpenses = imcSupplyCost + chaserCost + couponTotal + parseFloat(promotionTotal || "0");
@@ -196,12 +198,9 @@ const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record
   // Profit after all expenses
   const profitAfterExpenses = revenueAfterFees - totalExpenses;
 
-  // IMC/Valley split of remaining profit
+  // IMC/Valley split
   const imcTake = profitAfterExpenses * IMC_SPLIT;
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
-
-  // Valley net (their split - their share of shared expenses - valley only expenses + already accounted for in split)
-  const valleyNet = valleyTake + imcShareOfExpenses - totalExpenses;
 
   const filteredCardInventory = cardInventory.filter(c => {
     if (c.quantity <= 0) return false;
@@ -258,10 +257,12 @@ const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record
     setSaving(true);
     const { data: brk } = await supabase.from("Breaks").insert({
       date, box_name: boxName, num_boxes: numBoxes,
-      box_value: parseFloat(boxValue || "0"),
+      box_value: 0,
       revenue: Math.round(revenueAfterFees * 100) / 100,
       spots_sold: spotsSold, free_giveaways: freeGiveaways,
       net_profit: Math.round(profitAfterExpenses * 100) / 100,
+      imc_take: Math.round(imcTake * 100) / 100,
+      valley_take: Math.round(valleyTake * 100) / 100,
     }).select().single();
 
     if (brk) {
@@ -320,7 +321,7 @@ const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record
     await loadCardInventory();
     setSaving(false);
     setView("list");
-    setCsvData([]); setCsvName(""); setBoxName(""); setBoxValue(""); setNumBoxes(1);
+    setCsvData([]); setCsvName(""); setBoxName(""); setNumBoxes(1);
     setPickedCards({}); setCardSearch("");
     setSupplyEstimates({}); setEditedEstimates({});
     setMagPros(""); setSuppliesDeducted(false); setPromotionTotal("");
@@ -360,7 +361,7 @@ const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead><tr style={{ background: "#0f0f0f" }}>
-                {["Date","Box","Boxes","Spots","Revenue (after fees)","Net profit","BOBA take","Valley take",""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>)}
+                {["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take",""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {breaks.map(b => (
@@ -409,7 +410,7 @@ const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record
           </div>
           <div style={s.row}>
             <div><label style={s.label}>Number of boxes</label><input style={s.input} type="number" min={1} value={numBoxes} onChange={e => setNumBoxes(Number(e.target.value))} /></div>
-            <div><label style={s.label}>Promotion total ($) <span style={{ color: "#555" }}>(manual)</span></label><input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} /></div>
+            <div><label style={s.label}>Promotion total ($)</label><input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} /></div>
           </div>
         </div>
 
@@ -570,32 +571,39 @@ const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record
             {/* Shared expenses */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Shared expenses (IMC 70% / Valley 30%)</div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Shipping supplies</span><span style={{ color: "#f87171" }}>-${imcSupplyCost.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>Shipping supplies (incl. MagPros)</span><span style={{ color: "#f87171" }}>-${imcSupplyCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Chaser card costs</span><span style={{ color: "#f87171" }}>-${chaserCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Coupon spend</span><span style={{ color: "#f87171" }}>-${couponTotal.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Promotion total</span><span style={{ color: "#f87171" }}>-${parseFloat(promotionTotal || "0").toFixed(2)}</span></div>
-              <div style={{ ...s.expenseRow, borderBottom: "none", marginTop: 4 }}>
+              <div style={{ ...s.expenseRow, marginTop: 4 }}>
                 <span style={{ color: "#aaa", fontWeight: 600 }}>Total shared</span>
                 <span style={{ color: "#fb923c", fontWeight: 600 }}>${sharedExpenses.toFixed(2)}</span>
+              </div>
+              <div style={s.expenseRow}>
+                <span style={{ color: "#555", fontSize: 12 }}>↳ IMC pays (70%)</span>
+                <span style={{ color: "#fb923c", fontSize: 12 }}>-${imcShareOfExpenses.toFixed(2)}</span>
+              </div>
+              <div style={{ ...s.expenseRow, borderBottom: "none" }}>
+                <span style={{ color: "#555", fontSize: 12 }}>↳ Valley pays (30%)</span>
+                <span style={{ color: "#f87171", fontSize: 12 }}>-${valleyShareOfExpenses.toFixed(2)}</span>
               </div>
             </div>
 
             {/* Valley only expenses */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Valley only expenses</div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Valley supplies (stickers, MagPros etc)</span><span style={{ color: "#f87171" }}>-${valleySupplyCost.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>Valley supplies (stickers etc)</span><span style={{ color: "#f87171" }}>-${valleySupplyCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Insurance card costs</span><span style={{ color: "#f87171" }}>-${insuranceCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>First Timer card costs</span><span style={{ color: "#f87171" }}>-${firstTimerCost.toFixed(2)}</span></div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Giveaway card costs</span><span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span></div>
-              <div style={{ ...s.expenseRow, borderBottom: "none", marginTop: 4 }}>
-                <span style={{ color: "#aaa", fontWeight: 600 }}>Total Valley only</span>
-                <span style={{ color: "#fb923c", fontWeight: 600 }}>${valleyOnlyExpenses.toFixed(2)}</span>
+              <div style={{ ...s.expenseRow, borderBottom: "none" }}>
+                <span style={{ color: "#777" }}>Giveaway card costs</span>
+                <span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span>
               </div>
             </div>
 
             {/* Profit after all expenses */}
             <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-              <div style={{ ...s.expenseRow, borderBottom: "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ color: "#aaa", fontWeight: 600, fontSize: 14 }}>Profit after all expenses</span>
                 <span style={{ color: profitAfterExpenses >= 0 ? "#4ade80" : "#f87171", fontWeight: 700, fontSize: 18 }}>${profitAfterExpenses.toFixed(2)}</span>
               </div>
@@ -605,14 +613,19 @@ const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record
             <div style={{ fontSize: 11, color: "#555", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>IMC split (70/30 of profit after expenses)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ background: "#0f0f0f", border: "1px solid #fb923c33", borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>🏆 BOBA take (70%)</div>
+                <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏆 BOBA take (70%)</div>
                 <div style={{ fontSize: 28, fontWeight: 800, color: "#fb923c" }}>${imcTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>70% of ${profitAfterExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Profit split: ${imcTake.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555" }}>Expenses paid: -${imcShareOfExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 12, color: "#fb923c", marginTop: 6, fontWeight: 600 }}>Net to BOBA: ${(imcTake - imcShareOfExpenses).toFixed(2)}</div>
               </div>
               <div style={{ background: "#0f0f0f", border: "1px solid #4ade8033", borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>🏠 Valley take (30%)</div>
+                <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏠 Valley take (30%)</div>
                 <div style={{ fontSize: 28, fontWeight: 800, color: "#4ade80" }}>${valleyTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>30% of ${profitAfterExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Profit split: ${valleyTake.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555" }}>Shared expenses: -${valleyShareOfExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555" }}>Valley only expenses: -${valleyOnlyExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 12, color: "#4ade80", marginTop: 6, fontWeight: 600 }}>Net to Valley: ${(valleyTake - valleyShareOfExpenses - valleyOnlyExpenses).toFixed(2)}</div>
               </div>
             </div>
           </div>
