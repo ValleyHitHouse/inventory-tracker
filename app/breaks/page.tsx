@@ -75,13 +75,13 @@ function calcSupplyEstimates(csvData: any[]) {
         estimates["Team bags"] += 1;
         estimates["Toploaders"] += 2;
         estimates["Penny sleeves"] += 3;
-      } else if (orderNum < 7) {
-        // 2nd-6th purchase
+      } else if (orderNum < 9) {
+        // 2nd-8th purchase
         estimates["Team bags"] += 1;
         estimates["Toploaders"] += 1;
         estimates["Penny sleeves"] += 2;
       } else {
-        // 7th+ purchase — box instead of bubble mailer
+        // 9th+ purchase — box instead of bubble mailer
         estimates["Boxes (S)"] += 1;
         estimates["Team bags"] += 1;
         estimates["Toploaders"] += 1;
@@ -527,7 +527,36 @@ export default function Breaks() {
                 />
               </div>
             </div>
-
+{/* Add extra supply */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>Add extra supply</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select
+                  id="extraSupplyName"
+                  style={{ ...s.input, flex: 1 }}
+                  defaultValue="">
+                  <option value="" disabled>Select supply...</option>
+                  {["Armalopes","Toploaders","Penny sleeves","Giveaway cards","Team bags","Bubble mailers","Stickers","Boxes (S)","Boxes (M)","Boxes (L)","MagPros","Shipping labels","Packing tape","Packing paper"].map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <input id="extraSupplyQty" type="number" min={1} defaultValue={1} style={{ ...s.smallInput, width: 70 }} />
+                <button
+                  onClick={() => {
+                    const nameEl = document.getElementById("extraSupplyName") as HTMLSelectElement;
+                    const qtyEl = document.getElementById("extraSupplyQty") as HTMLInputElement;
+                    const name = nameEl.value;
+                    const qty = parseInt(qtyEl.value) || 1;
+                    if (!name) return;
+                    setEditedEstimates(prev => ({ ...prev, [name]: (prev[name] || 0) + qty }));
+                    nameEl.value = "";
+                    qtyEl.value = "1";
+                  }}
+                  style={{ background: "#a78bfa22", border: "1px solid #a78bfa", color: "#a78bfa", borderRadius: 8, padding: "0 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  + Add
+                </button>
+              </div>
+            </div>
             <button
               onClick={deductSuppliesFromInventory}
               disabled={deductingSupplies || suppliesDeducted || !magPros}
