@@ -180,7 +180,7 @@ export default function Breaks() {
   const totalSupplyCost = imcSupplyCost + valleySupplyCost;
 
   // Giveaway card cost (Valley only)
-  const giveawayCardCost = getSupplyCost("Giveaway cards", allEstimates["Giveaway cards"] || 0);
+const giveawayCardCost = getSupplyCost("Giveaway cards", (allEstimates as Record<string, number>)["Giveaway cards"] || 0);
 
   // Shared expenses (IMC 70% / Valley 30%)
   const sharedExpenses = imcSupplyCost + chaserCost + couponTotal + parseFloat(promotionTotal || "0");
