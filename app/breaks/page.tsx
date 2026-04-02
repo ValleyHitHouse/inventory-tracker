@@ -73,19 +73,19 @@ function calcSupplyEstimates(csvData: any[]) {
         estimates["Bubble mailers"] += 1;
         estimates["Stickers"] += 1;
         estimates["Team bags"] += 1;
-        estimates["Toploaders"] += 4;
-        estimates["Penny sleeves"] += 6;
+        estimates["Toploaders"] += 2;
+        estimates["Penny sleeves"] += 3;
       } else if (orderNum < 7) {
         // 2nd-6th purchase
         estimates["Team bags"] += 1;
-        estimates["Toploaders"] += 2;
-        estimates["Penny sleeves"] += 4;
+        estimates["Toploaders"] += 1;
+        estimates["Penny sleeves"] += 2;
       } else {
         // 7th+ purchase — box instead of bubble mailer
         estimates["Boxes (S)"] += 1;
         estimates["Team bags"] += 1;
-        estimates["Toploaders"] += 2;
-        estimates["Penny sleeves"] += 4;
+        estimates["Toploaders"] += 1;
+        estimates["Penny sleeves"] += 2;
       }
     }
   }
