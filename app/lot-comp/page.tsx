@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useParams, usePathname } from "next/navigation";
 
 function parseCSV(text: string) {
   const lines = text.trim().split("\n");
@@ -41,7 +42,127 @@ const STATUS_LABELS: Record<string, string> = {
   in_transit: "In Transit", arrived: "Arrived", received: "Received",
 };
 
+// SELLER VIEW
+function SellerView({ id }: { id: string }) {
+  const [lot, setLot] = useState<any>(null);
+  const [cards, setCards] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [accepting, setAccepting] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("PayPal");
+
+  useEffect(() => {
+    async function load() {
+      const { data: lotData } = await supabase.from("lotcomps").select("*").eq("id", id).single();
+      if (lotData) setLot(lotData);
+      const { data: cardData } = await supabase.from("lotcompcards").select("*").eq("lot_id", id);
+      if (cardData) setCards(cardData);
+      setLoading(false);
+    }
+    load();
+  }, [id]);
+
+  async function acceptLot() {
+    setAccepting(true);
+    await supabase.from("lotcomps").update({ status: "accepted", payment_method: paymentMethod }).eq("id", id);
+    setAccepted(true);
+    setAccepting(false);
+  }
+
+  if (loading) return <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><p style={{ color: "#555" }}>Loading...</p></div>;
+  if (!lot) return <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><p style={{ color: "#555" }}>Lot not found.</p></div>;
+
+  const isAlreadyAccepted = lot.status !== "pending";
+
+  return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", fontFamily: "sans-serif" }}>
+      <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e", padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#fb923c" }}>ValleyHitHouse</div>
+        <div style={{ fontSize: 12, color: "#555" }}>Lot offer</div>
+      </div>
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: 32 }}>
+        <div style={{ marginBottom: 32, textAlign: "center" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, marginBottom: 8 }}>{lot.lot_name}</h1>
+          {lot.seller_name && <p style={{ color: "#555", fontSize: 14, margin: 0 }}>Prepared for {lot.seller_name}</p>}
+        </div>
+        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: 32, marginBottom: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: "#555", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 8 }}>Our offer for your lot</div>
+          <div style={{ fontSize: 56, fontWeight: 900, color: "#4ade80", marginBottom: 8 }}>${parseFloat(lot.total_offer || "0").toFixed(2)}</div>
+          <div style={{ fontSize: 14, color: "#555" }}>
+            {cards.length > 0 && `${lot.offer_percent}% of $${parseFloat(lot.total_comp || "0").toFixed(2)} card comp`}
+            {lot.giveaway_count > 0 && ` + ${lot.giveaway_count} giveaway cards @ $${parseFloat(lot.giveaway_comp || "0").toFixed(2)} each`}
+          </div>
+        </div>
+        {cards.length > 0 && (
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e1e1e", fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: ".6px" }}>Card breakdown</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead><tr style={{ background: "#0f0f0f" }}>
+                {["Type","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => (
+                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {cards.map((card, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
+                    <td style={{ padding: "10px 14px" }}><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span></td>
+                    <td style={{ padding: "10px 14px", color: "#e5e5e5", fontWeight: 600 }}>{card.hero}</td>
+                    <td style={{ padding: "10px 14px", color: "#a78bfa" }}>{card.athlete}</td>
+                    <td style={{ padding: "10px 14px", color: "#777", fontSize: 12 }}>{card.treatment}</td>
+                    <td style={{ padding: "10px 14px" }}>{card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}</td>
+                    <td style={{ padding: "10px 14px", color: "#aaa" }}>{card.quantity}</td>
+                    <td style={{ padding: "10px 14px", color: "#aaa" }}>${parseFloat(card.comp_value || "0").toFixed(2)}</td>
+                    <td style={{ padding: "10px 14px", color: "#4ade80", fontWeight: 600 }}>${parseFloat(card.offer_value || "0").toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {lot.giveaway_count > 0 && (
+              <div style={{ padding: "12px 20px", borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                <span style={{ color: "#777" }}>🎁 {lot.giveaway_count} giveaway cards @ ${parseFloat(lot.giveaway_comp || "0").toFixed(2)} each</span>
+                <span style={{ color: "#4ade80", fontWeight: 600 }}>${(lot.giveaway_count * parseFloat(lot.giveaway_comp || "0")).toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {accepted || isAlreadyAccepted ? (
+          <div style={{ background: "#0d2010", border: "1px solid #166534", borderRadius: 12, padding: 32, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#4ade80", marginBottom: 8 }}>Offer accepted!</div>
+            <div style={{ fontSize: 14, color: "#555" }}>Payment via {lot.payment_method || paymentMethod} — ValleyHitHouse will be in touch shortly.</div>
+          </div>
+        ) : (
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: 32 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, textAlign: "center" }}>Ready to accept this offer?</div>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 10, textAlign: "center" }}>Select your preferred payment method</div>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                {["PayPal", "Venmo", "Zelle"].map(method => (
+                  <button key={method} onClick={() => setPaymentMethod(method)} style={{ padding: "12px 24px", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", border: `2px solid ${paymentMethod === method ? "#4ade80" : "#222"}`, background: paymentMethod === method ? "#0d2010" : "#0f0f0f", color: paymentMethod === method ? "#4ade80" : "#555" }}>{method}</button>
+                ))}
+              </div>
+            </div>
+            <button onClick={acceptLot} disabled={accepting} style={{ width: "100%", background: "linear-gradient(135deg,#166534,#15803d)", border: "none", borderRadius: 10, padding: 16, fontSize: 16, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
+              {accepting ? "Accepting..." : `Accept offer of $${parseFloat(lot.total_offer || "0").toFixed(2)}`}
+            </button>
+            <p style={{ fontSize: 12, color: "#444", textAlign: "center", marginTop: 12 }}>By accepting, you agree to ship the lot to ValleyHitHouse within 5 business days.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// MAIN DASHBOARD PAGE
 export default function LotCompPage() {
+  const pathname = usePathname();
+  
+  // Check if we're on a seller page like /lot-comp/4
+  const segments = pathname?.split("/").filter(Boolean);
+  if (segments && segments.length === 2 && segments[0] === "lot-comp") {
+    return <SellerView id={segments[1]} />;
+  }
+
   const [view, setView] = useState<"list"|"new"|"detail">("list");
   const [lots, setLots] = useState<any[]>([]);
   const [selectedLot, setSelectedLot] = useState<any>(null);
@@ -60,7 +181,6 @@ export default function LotCompPage() {
   const [allCards, setAllCards] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
   const [pickedCards, setPickedCards] = useState<Record<string, {card: any, qty: number, comp: string, subset: string}>>({});
-
   const [trackingNumber, setTrackingNumber] = useState("");
   const [carrier, setCarrier] = useState("USPS");
   const [savingTracking, setSavingTracking] = useState(false);
@@ -73,15 +193,12 @@ export default function LotCompPage() {
   }, []);
 
   useEffect(() => {
-    fetch(SETS[selectedSet].file)
-      .then(r => r.text())
-      .then(text => setAllCards(parseCSV(text)));
+    fetch(SETS[selectedSet].file).then(r => r.text()).then(text => setAllCards(parseCSV(text)));
   }, [selectedSet]);
 
   async function loadLots() {
     setLoading(true);
-    const { data, error } = await supabase.from("lotcomps").select("*").order("created_at", { ascending: false });
-    if (error) console.error("loadLots error:", error);
+    const { data } = await supabase.from("lotcomps").select("*").order("created_at", { ascending: false });
     if (data) setLots(data);
     setLoading(false);
   }
@@ -90,8 +207,7 @@ export default function LotCompPage() {
     setSelectedLot(lot);
     setTrackingNumber(lot.tracking_number || "");
     setCarrier(lot.carrier || "USPS");
-    const { data, error } = await supabase.from("lotcompcards").select("*").eq("lot_id", lot.id);
-    if (error) console.error("loadLotDetail error:", error);
+    const { data } = await supabase.from("lotcompcards").select("*").eq("lot_id", lot.id);
     if (data) setLotCards(data);
     setView("detail");
   }
@@ -103,10 +219,7 @@ export default function LotCompPage() {
 
   function pickCard(card: any) {
     const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
-    setPickedCards(prev => ({
-      ...prev,
-      [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, comp: "", subset: activeSubset }
-    }));
+    setPickedCards(prev => ({ ...prev, [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, comp: "", subset: activeSubset } }));
   }
 
   function updateComp(key: string, comp: string) {
@@ -114,11 +227,8 @@ export default function LotCompPage() {
   }
 
   function updateQty(key: string, qty: number) {
-    if (qty <= 0) {
-      setPickedCards(prev => { const n = { ...prev }; delete n[key]; return n; });
-    } else {
-      setPickedCards(prev => ({ ...prev, [key]: { ...prev[key], qty } }));
-    }
+    if (qty <= 0) { setPickedCards(prev => { const n = { ...prev }; delete n[key]; return n; }); }
+    else { setPickedCards(prev => ({ ...prev, [key]: { ...prev[key], qty } })); }
   }
 
   const cardCompTotal = Object.values(pickedCards).reduce((sum, { comp, qty }) => sum + parseFloat(comp || "0") * qty, 0);
@@ -130,52 +240,28 @@ export default function LotCompPage() {
   async function saveLot() {
     if (!lotName) return alert("Please enter a lot name!");
     setSaving(true);
-
     const { data: lot, error } = await supabase.from("lotcomps").insert({
-      lot_name: lotName,
-      seller_name: sellerName,
-      giveaway_count: giveawayCount,
+      lot_name: lotName, seller_name: sellerName, giveaway_count: giveawayCount,
       giveaway_comp: parseFloat(giveawayPricePerCard || "0"),
       offer_percent: parseFloat(offerPercent || "70"),
       total_comp: Math.round(totalComp * 100) / 100,
       total_offer: Math.round(totalOffer * 100) / 100,
       status: "pending",
     }).select().single();
-
-    if (error) {
-      console.error("saveLot error:", error);
-      alert("Error saving lot: " + error.message);
-      setSaving(false);
-      return;
-    }
-
+    if (error) { alert("Error: " + error.message); setSaving(false); return; }
     if (lot) {
       const cardRows = Object.values(pickedCards).map(({ card, qty, comp, subset }) => ({
-        lot_id: lot.id,
-        card_number: card["Card #"],
-        hero: card.Hero,
-        athlete: card["Athlete Inspiration"],
-        treatment: card.Treatment,
-        weapon: card.Weapon,
-        set_name: SETS[selectedSet].label,
-        subset,
-        quantity: qty,
+        lot_id: lot.id, card_number: card["Card #"], hero: card.Hero,
+        athlete: card["Athlete Inspiration"], treatment: card.Treatment,
+        weapon: card.Weapon, set_name: SETS[selectedSet].label, subset, quantity: qty,
         comp_value: parseFloat(comp || "0"),
         offer_value: parseFloat(comp || "0") * (parseFloat(offerPercent || "0") / 100),
       }));
-      if (cardRows.length > 0) {
-        const { error: cardError } = await supabase.from("lotcompcards").insert(cardRows);
-        if (cardError) console.error("lotcompcards insert error:", cardError);
-      }
-
+      if (cardRows.length > 0) await supabase.from("lotcompcards").insert(cardRows);
       await loadLots();
-      setSelectedLot(lot);
-      setLotCards(cardRows);
-      setTrackingNumber("");
-      setCarrier("USPS");
-      setSaving(false);
-      resetForm();
-      setView("detail");
+      setSelectedLot(lot); setLotCards(cardRows);
+      setTrackingNumber(""); setCarrier("USPS");
+      setSaving(false); resetForm(); setView("detail");
     }
   }
 
@@ -187,21 +273,16 @@ export default function LotCompPage() {
   async function saveTracking() {
     if (!trackingNumber) return alert("Please enter a tracking number!");
     setSavingTracking(true);
-    const { error } = await supabase.from("lotcomps").update({
-      tracking_number: trackingNumber, carrier, status: "in_transit",
-    }).eq("id", selectedLot.id);
-    if (error) console.error("saveTracking error:", error);
+    await supabase.from("lotcomps").update({ tracking_number: trackingNumber, carrier, status: "in_transit" }).eq("id", selectedLot.id);
     const updated = { ...selectedLot, tracking_number: trackingNumber, carrier, status: "in_transit" };
-    setSelectedLot(updated);
-    setLots(prev => prev.map(l => l.id === selectedLot.id ? updated : l));
+    setSelectedLot(updated); setLots(prev => prev.map(l => l.id === selectedLot.id ? updated : l));
     setSavingTracking(false);
   }
 
   async function markArrived() {
     await supabase.from("lotcomps").update({ status: "arrived", arrived_at: new Date().toISOString() }).eq("id", selectedLot.id);
     const updated = { ...selectedLot, status: "arrived" };
-    setSelectedLot(updated);
-    setLots(prev => prev.map(l => l.id === selectedLot.id ? updated : l));
+    setSelectedLot(updated); setLots(prev => prev.map(l => l.id === selectedLot.id ? updated : l));
   }
 
   async function receiveLot() {
@@ -214,11 +295,7 @@ export default function LotCompPage() {
     }
     const subsetToId: Record<string, number> = { Chasers: 4, Insurance: 3, "First Timers": 2 };
     for (const card of lotCards) {
-      await supabase.from("cardinventory").insert({
-        subset: card.subset, card_number: card.card_number, hero: card.hero,
-        athlete: card.athlete, variation: card.treatment, weapon: card.weapon,
-        set_name: card.set_name, quantity: card.quantity, price_paid: card.offer_value,
-      });
+      await supabase.from("cardinventory").insert({ subset: card.subset, card_number: card.card_number, hero: card.hero, athlete: card.athlete, variation: card.treatment, weapon: card.weapon, set_name: card.set_name, quantity: card.quantity, price_paid: card.offer_value });
       const invId = subsetToId[card.subset];
       if (invId) {
         const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
@@ -227,8 +304,7 @@ export default function LotCompPage() {
     }
     await supabase.from("lotcomps").update({ status: "received", received_at: new Date().toISOString() }).eq("id", selectedLot.id);
     const updated = { ...selectedLot, status: "received" };
-    setSelectedLot(updated);
-    setLots(prev => prev.map(l => l.id === selectedLot.id ? updated : l));
+    setSelectedLot(updated); setLots(prev => prev.map(l => l.id === selectedLot.id ? updated : l));
     setReceivingLot(false);
   }
 
@@ -241,8 +317,7 @@ export default function LotCompPage() {
 
   function copyLink() {
     navigator.clipboard.writeText(`${siteUrl}/lot-comp/${selectedLot.id}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
   }
 
   const s = {
@@ -283,7 +358,6 @@ export default function LotCompPage() {
             </div>
           </div>
 
-          {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
             <div style={s.section}><div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Card comp</div><div style={{ fontSize: 22, fontWeight: 700, color: "#e5e5e5" }}>${parseFloat(selectedLot.total_comp || "0").toFixed(2)}</div></div>
             <div style={s.section}><div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total offer</div><div style={{ fontSize: 22, fontWeight: 700, color: "#4ade80" }}>${parseFloat(selectedLot.total_offer || "0").toFixed(2)}</div></div>
@@ -291,19 +365,15 @@ export default function LotCompPage() {
             <div style={s.section}><div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Payment</div><div style={{ fontSize: 22, fontWeight: 700, color: "#a78bfa" }}>{selectedLot.payment_method || "—"}</div></div>
           </div>
 
-          {/* Seller link */}
           <div style={s.section}>
-            <div style={s.sectionTitle}>🔗 Seller page link — send this to the seller</div>
+            <div style={s.sectionTitle}>🔗 Seller page link</div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <input style={{ ...s.input, color: "#555", fontSize: 12 }} readOnly value={sellerLink} />
-              <button onClick={copyLink} style={{ ...s.submitBtn, whiteSpace: "nowrap", padding: "10px 20px", background: copied ? "#166534" : "linear-gradient(135deg,#7c3aed,#db2777)" }}>
-                {copied ? "✓ Copied!" : "Copy link"}
-              </button>
+              <button onClick={copyLink} style={{ ...s.submitBtn, whiteSpace: "nowrap", padding: "10px 20px", background: copied ? "#166534" : "linear-gradient(135deg,#7c3aed,#db2777)" }}>{copied ? "✓ Copied!" : "Copy link"}</button>
               <a href={sellerLink} target="_blank" style={{ ...s.submitBtn, whiteSpace: "nowrap", padding: "10px 20px", textDecoration: "none", background: "#1a1a2e", border: "1px solid #333" }}>Open ↗</a>
             </div>
           </div>
 
-          {/* Tracking */}
           <div style={s.section}>
             <div style={s.sectionTitle}>📦 Shipping & tracking</div>
             {status === "pending" && <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Tracking available once seller accepts.</p>}
@@ -324,29 +394,18 @@ export default function LotCompPage() {
                 {savingTracking ? "Saving..." : "Save tracking"}
               </button>
               {selectedLot.tracking_number && (
-                <a href={getTrackingUrl(selectedLot.carrier, selectedLot.tracking_number)} target="_blank" style={{ ...s.submitBtn, background: "#1a1a2e", border: "1px solid #333", textDecoration: "none", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap" }}>
-                  🔍 Track package
-                </a>
+                <a href={getTrackingUrl(selectedLot.carrier, selectedLot.tracking_number)} target="_blank" style={{ ...s.submitBtn, background: "#1a1a2e", border: "1px solid #333", textDecoration: "none", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap" }}>🔍 Track</a>
               )}
             </div>
-            {status === "in_transit" && (
-              <button onClick={markArrived} style={{ marginTop: 12, background: "#166534", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>
-                ✓ Mark as arrived
-              </button>
-            )}
-            {(status === "arrived" || status === "received") && (
-              <div style={{ marginTop: 12, fontSize: 13, color: "#4ade80" }}>✓ Package arrived</div>
-            )}
+            {status === "in_transit" && <button onClick={markArrived} style={{ marginTop: 12, background: "#166534", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>✓ Mark as arrived</button>}
+            {(status === "arrived" || status === "received") && <div style={{ marginTop: 12, fontSize: 13, color: "#4ade80" }}>✓ Package arrived</div>}
           </div>
 
-          {/* Cards */}
           <div style={s.section}>
             <div style={s.sectionTitle}>Cards in this lot</div>
-            {lotCards.length === 0 ? <p style={{ color: "#555", fontSize: 13 }}>No specific cards logged</p> : (
+            {lotCards.length === 0 ? <p style={{ color: "#555", fontSize: 13 }}>No specific cards</p> : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "#0f0f0f" }}>
-                  {["Subset","#","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => <th key={h} style={s.th}>{h}</th>)}
-                </tr></thead>
+                <thead><tr style={{ background: "#0f0f0f" }}>{["Subset","#","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {lotCards.map((card, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
@@ -378,7 +437,6 @@ export default function LotCompPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>New lot comp</h1>
           <button onClick={() => setView("list")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
-
         <div style={s.section}>
           <div style={s.sectionTitle}>Lot details</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
@@ -395,20 +453,15 @@ export default function LotCompPage() {
         <div style={s.section}>
           <div style={s.sectionTitle}>Add cards from database</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            {SETS.map((set, i) => (
-              <button key={i} onClick={() => setSelectedSet(i)} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${selectedSet === i ? "#fb923c" : "#222"}`, background: selectedSet === i ? "#fb923c22" : "#0f0f0f", color: selectedSet === i ? "#fb923c" : "#555" }}>{set.label}</button>
-            ))}
+            {SETS.map((set, i) => <button key={i} onClick={() => setSelectedSet(i)} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${selectedSet === i ? "#fb923c" : "#222"}`, background: selectedSet === i ? "#fb923c22" : "#0f0f0f", color: selectedSet === i ? "#fb923c" : "#555" }}>{set.label}</button>)}
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            {SUBSETS.map(sub => (
-              <button key={sub} onClick={() => setActiveSubset(sub)} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${activeSubset === sub ? "#a78bfa" : "#222"}`, background: activeSubset === sub ? "#a78bfa22" : "#0f0f0f", color: activeSubset === sub ? "#a78bfa" : "#555" }}>{sub}</button>
-            ))}
+            {SUBSETS.map(sub => <button key={sub} onClick={() => setActiveSubset(sub)} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${activeSubset === sub ? "#a78bfa" : "#222"}`, background: activeSubset === sub ? "#a78bfa22" : "#0f0f0f", color: activeSubset === sub ? "#a78bfa" : "#555" }}>{sub}</button>)}
           </div>
           <input style={{ ...s.input, marginBottom: 12 }} placeholder="🔍 Search by hero, athlete, card #, treatment..." value={cardSearch} onChange={e => setCardSearch(e.target.value)} />
           <div style={{ maxHeight: 300, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8 }}>
-            {filteredCards.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>Type to search cards</div>
-            ) : filteredCards.map((card, i) => {
+            {filteredCards.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>Type to search cards</div>
+            : filteredCards.map((card, i) => {
               const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
               const isPicked = !!pickedCards[key];
               return (
@@ -468,10 +521,7 @@ export default function LotCompPage() {
             </div>
           </div>
         )}
-
-        <button style={{ ...s.submitBtn, width: "100%", marginTop: 8 }} onClick={saveLot} disabled={saving}>
-          {saving ? "Saving..." : "Generate lot & create seller link"}
-        </button>
+        <button style={{ ...s.submitBtn, width: "100%", marginTop: 8 }} onClick={saveLot} disabled={saving}>{saving ? "Saving..." : "Generate lot & create seller link"}</button>
       </div>
     </div>
   );
@@ -494,9 +544,7 @@ export default function LotCompPage() {
         ) : (
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead><tr style={{ background: "#0f0f0f" }}>
-                {["Lot name","Seller","Card comp","Total offer","Status","Payment","Date",""].map(h => <th key={h} style={s.th}>{h}</th>)}
-              </tr></thead>
+              <thead><tr style={{ background: "#0f0f0f" }}>{["Lot name","Seller","Card comp","Total offer","Status","Payment","Date",""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {lots.map((lot, i) => (
                   <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
