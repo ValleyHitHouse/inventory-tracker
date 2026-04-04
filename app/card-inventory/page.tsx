@@ -40,6 +40,12 @@ export default function CardInventoryPage() {
   const [giveawayTotal, setGiveawayTotal] = useState(0);
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [editingCard, setEditingCard] = useState<any>(null);
+  const [editQty, setEditQty] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // Add card form
   const [selectedSet, setSelectedSet] = useState(0);
@@ -49,7 +55,7 @@ export default function CardInventoryPage() {
   const [picked, setPicked] = useState<Record<string, {card: any, qty: number, subset: string, pricePaid: string}>>({});
   const [giveawayCount, setGiveawayCount] = useState(0);
   const [giveawayPriceEach, setGiveawayPriceEach] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [addSaving, setAddSaving] = useState(false);
 
   useEffect(() => { loadInventory(); }, []);
 
@@ -66,6 +72,44 @@ export default function CardInventoryPage() {
     const { data: inv } = await supabase.from("cardinventory").select("*").order("subset").order("created_at", { ascending: false });
     if (inv) setInventory(inv);
     setLoading(false);
+  }
+
+  async function deleteCard(item: any) {
+    setDeletingId(item.id);
+    await supabase.from("cardinventory").delete().eq("id", item.id);
+    // Update main inventory count
+    const invId = subsetToInventoryId[item.subset];
+    if (invId) {
+      const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
+      if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - item.quantity) }).eq("id", invId);
+    }
+    setDeletingId(null);
+    setConfirmId(null);
+    loadInventory();
+  }
+
+  async function saveEdit() {
+    if (!editingCard) return;
+    setSaving(true);
+    const newQty = parseInt(editQty) || 0;
+    const oldQty = editingCard.quantity;
+    const diff = newQty - oldQty;
+
+    await supabase.from("cardinventory").update({
+      quantity: newQty,
+      price_paid: parseFloat(editPrice || "0"),
+    }).eq("id", editingCard.id);
+
+    // Update main inventory count by the difference
+    const invId = subsetToInventoryId[editingCard.subset];
+    if (invId && diff !== 0) {
+      const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
+      if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity + diff) }).eq("id", invId);
+    }
+
+    setSaving(false);
+    setEditingCard(null);
+    loadInventory();
   }
 
   const filteredCards = allCards.filter(c => {
@@ -95,46 +139,30 @@ export default function CardInventoryPage() {
   }
 
   async function saveCards() {
-    if (Object.keys(picked).length === 0 && giveawayCount === 0) {
-      return alert("Please add at least one card or giveaway cards!");
-    }
-    setSaving(true);
-
-    // Add giveaway cards
+    if (Object.keys(picked).length === 0 && giveawayCount === 0) return alert("Please add at least one card!");
+    setAddSaving(true);
     if (giveawayCount > 0) {
       await supabase.from("giveawaytotal").update({ total: giveawayTotal + giveawayCount }).eq("id", 1);
       const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
       if (giv) await supabase.from("Inventory").update({ quantity: giv.quantity + giveawayCount }).eq("id", 1);
     }
-
-    // Add specific cards
     const rows = Object.values(picked).map(({ card, qty, subset, pricePaid }) => ({
-      subset,
-      card_number: card["Card #"],
-      hero: card.Hero,
-      athlete: card["Athlete Inspiration"],
-      variation: card.Treatment,
-      weapon: card.Weapon,
-      set_name: SETS[selectedSet].label,
-      quantity: qty,
-      price_paid: parseFloat(pricePaid || "0"),
+      subset, card_number: card["Card #"], hero: card.Hero,
+      athlete: card["Athlete Inspiration"], variation: card.Treatment,
+      weapon: card.Weapon, set_name: SETS[selectedSet].label,
+      quantity: qty, price_paid: parseFloat(pricePaid || "0"),
     }));
     if (rows.length > 0) await supabase.from("cardinventory").insert(rows);
-
-    // Update main inventory counts
     for (const subset of SUBSETS) {
-      const totalForSubset = Object.values(picked)
-        .filter(p => p.subset === subset)
-        .reduce((sum, p) => sum + p.qty, 0);
-      if (totalForSubset > 0) {
+      const total = Object.values(picked).filter(p => p.subset === subset).reduce((s, p) => s + p.qty, 0);
+      if (total > 0) {
         const invId = subsetToInventoryId[subset];
         const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
-        if (inv) await supabase.from("Inventory").update({ quantity: inv.quantity + totalForSubset }).eq("id", invId);
+        if (inv) await supabase.from("Inventory").update({ quantity: inv.quantity + total }).eq("id", invId);
       }
     }
-
     await loadInventory();
-    setSaving(false);
+    setAddSaving(false);
     setView("inventory");
     setPicked({}); setCardSearch(""); setGiveawayCount(0); setGiveawayPriceEach("");
   }
@@ -146,7 +174,7 @@ export default function CardInventoryPage() {
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
     input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" },
     smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "#e5e5e5", outline: "none", width: 90 },
-    submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
+    submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
     th: { padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" },
     td: { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
   };
@@ -155,6 +183,51 @@ export default function CardInventoryPage() {
     acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
     return acc;
   }, {} as Record<string, any[]>);
+
+  // EDIT MODAL
+  if (editingCard) return (
+    <div style={s.shell}>
+      <div style={s.content}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Edit card</h1>
+            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>{editingCard.hero} · {editingCard.athlete} · {editingCard.subset}</p>
+          </div>
+          <button onClick={() => setEditingCard(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Cancel</button>
+        </div>
+        <div style={s.section}>
+          <div style={s.sectionTitle}>Card details</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>Card #</div>
+              <div style={{ fontSize: 14, color: "#e5e5e5" }}>{editingCard.card_number}</div>
+            </div>
+            <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>Hero</div>
+              <div style={{ fontSize: 14, color: "#e5e5e5", fontWeight: 600 }}>{editingCard.hero}</div>
+            </div>
+            <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>Subset</div>
+              <div style={{ fontSize: 14, color: "#a78bfa" }}>{editingCard.subset}</div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Quantity</label>
+              <input style={s.input} type="number" min={0} value={editQty} onChange={e => setEditQty(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Price paid ($)</label>
+              <input style={s.input} type="number" min={0} step="0.01" value={editPrice} onChange={e => setEditPrice(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <button style={{ ...s.submitBtn, width: "100%" }} onClick={saveEdit} disabled={saving}>
+          {saving ? "Saving..." : "Save changes"}
+        </button>
+      </div>
+    </div>
+  );
 
   // ADD CARD VIEW
   if (view === "add") return (
@@ -168,7 +241,6 @@ export default function CardInventoryPage() {
           <button onClick={() => setView("inventory")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
 
-        {/* Giveaway cards */}
         <div style={s.section}>
           <div style={s.sectionTitle}>🎁 Giveaway cards</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -183,7 +255,6 @@ export default function CardInventoryPage() {
           </div>
         </div>
 
-        {/* Card picker */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Search & add specific cards</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -220,7 +291,6 @@ export default function CardInventoryPage() {
           </div>
         </div>
 
-        {/* Picked cards */}
         {Object.keys(picked).length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Cards to add — enter price paid per card</div>
@@ -251,8 +321,8 @@ export default function CardInventoryPage() {
           </div>
         )}
 
-        <button style={{ ...s.submitBtn, width: "100%" }} onClick={saveCards} disabled={saving}>
-          {saving ? "Saving..." : "Add to inventory"}
+        <button style={{ ...s.submitBtn, width: "100%" }} onClick={saveCards} disabled={addSaving}>
+          {addSaving ? "Saving..." : "Add to inventory"}
         </button>
       </div>
     </div>
@@ -270,7 +340,6 @@ export default function CardInventoryPage() {
           <button onClick={() => setView("add")} style={s.submitBtn}>+ Add cards manually</button>
         </div>
 
-        {/* Giveaway total */}
         <div style={{ ...s.section, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Total giveaway cards</div>
@@ -304,6 +373,7 @@ export default function CardInventoryPage() {
                       <th style={s.th}>Weapon</th>
                       <th style={s.th}>Price paid</th>
                       <th style={s.th}>Qty</th>
+                      <th style={s.th}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -319,6 +389,25 @@ export default function CardInventoryPage() {
                         </td>
                         <td style={{ ...s.td, color: "#fb923c", fontWeight: 600 }}>{item.price_paid ? `$${parseFloat(item.price_paid).toFixed(2)}` : "—"}</td>
                         <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.quantity}</td>
+                        <td style={{ ...s.td }}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              onClick={() => { setEditingCard(item); setEditQty(String(item.quantity)); setEditPrice(String(item.price_paid || "")); }}
+                              style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                              Edit
+                            </button>
+                            {confirmId === item.id ? (
+                              <div style={{ display: "flex", gap: 4 }}>
+                                <button onClick={() => deleteCard(item)} disabled={deletingId === item.id} style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                                  {deletingId === item.id ? "..." : "Confirm"}
+                                </button>
+                                <button onClick={() => setConfirmId(null)} style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Cancel</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setConfirmId(item.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Delete</button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
