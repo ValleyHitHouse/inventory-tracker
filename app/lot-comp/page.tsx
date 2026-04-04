@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { useParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 function parseCSV(text: string) {
   const lines = text.trim().split("\n");
@@ -158,10 +158,8 @@ export default function LotCompPage() {
   const pathname = usePathname();
   const segments = pathname?.split("/").filter(Boolean) || [];
   const isSellerPage = segments.length === 2 && segments[0] === "lot-comp" && segments[1] !== "";
-  
-  if (isSellerPage) {
-    return <SellerView id={segments[1]} />;
-  }
+
+  if (isSellerPage) return <SellerView id={segments[1]} />;
 
   const [view, setView] = useState<"list"|"new"|"detail">("list");
   const [lots, setLots] = useState<any[]>([]);
@@ -170,6 +168,8 @@ export default function LotCompPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [siteUrl, setSiteUrl] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingLotId, setDeletingLotId] = useState<number | null>(null);
 
   const [lotName, setLotName] = useState("");
   const [sellerName, setSellerName] = useState("");
@@ -210,6 +210,15 @@ export default function LotCompPage() {
     const { data } = await supabase.from("lotcompcards").select("*").eq("lot_id", lot.id);
     if (data) setLotCards(data);
     setView("detail");
+  }
+
+  async function deleteLot(id: number) {
+    setDeletingLotId(id);
+    await supabase.from("lotcompcards").delete().eq("lot_id", id);
+    await supabase.from("lotcomps").delete().eq("id", id);
+    setDeletingLotId(null);
+    setConfirmDeleteId(null);
+    loadLots();
   }
 
   const filteredCards = allCards.filter(c => {
@@ -556,7 +565,21 @@ export default function LotCompPage() {
                     <td style={s.td}><span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: STATUS_COLORS[lot.status] + "22", color: STATUS_COLORS[lot.status], fontWeight: 600 }}>{STATUS_LABELS[lot.status]}</span></td>
                     <td style={{ ...s.td, color: "#a78bfa" }}>{lot.payment_method || "—"}</td>
                     <td style={{ ...s.td, color: "#555" }}>{new Date(lot.created_at).toLocaleDateString()}</td>
-                    <td style={s.td}><button onClick={() => loadLotDetail(lot)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 10px", cursor: "pointer" }}>View</button></td>
+                    <td style={s.td}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => loadLotDetail(lot)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 10px", cursor: "pointer" }}>View</button>
+                        {confirmDeleteId === lot.id ? (
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button onClick={() => deleteLot(lot.id)} disabled={deletingLotId === lot.id} style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
+                              {deletingLotId === lot.id ? "..." : "Confirm"}
+                            </button>
+                            <button onClick={() => setConfirmDeleteId(null)} style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Cancel</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmDeleteId(lot.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Delete</button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
