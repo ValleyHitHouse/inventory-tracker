@@ -72,7 +72,7 @@ export default function BreakDetailPage() {
   const revenueBeforeFees = parseFloat(brk.revenue_before_fees || "0") || revenue / (1 - WHATNOT_FEE);
   const whatnotFees = revenueBeforeFees * WHATNOT_FEE;
   const marketValue = parseFloat(brk.market_value || "0");
-  const percentToMarket = marketValue > 0 ? ((revenueBeforeFees - couponTotal) / marketValue) * 100 : 0;
+const percentToMarket = marketValue > 0 ? (revenueBeforeFees / marketValue) * 100 : 0;
 
   const payingOrders = orders.filter(o => parseFloat(o.price || "0") > 0 && !o.cancelled);
   const freeOrders = orders.filter(o => parseFloat(o.price || "0") === 0);
