@@ -94,8 +94,8 @@ export default function Breaks() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [bobaFormBreak, setBobaFormBreak] = useState<any>(null);
-  const [markingSubmitted, setMarkingSubmitted] = useState<number | null>(null);
-
+const [markingSubmitted, setMarkingSubmitted] = useState<number | null>(null);
+const [bobaFormTips, setBobaFormTips] = useState("0.00");
   // Market prices from settings
   const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
 
@@ -284,6 +284,11 @@ export default function Breaks() {
       imc_take: Math.round(imcTake * 100) / 100,
       valley_take: Math.round(valleyTake * 100) / 100,
       boba_submitted: false,
+      coupon_total: Math.round(couponTotal * 100) / 100,
+      promotion_total: Math.round(parseFloat(promotionTotal || "0") * 100) / 100,
+      total_supply_cost: Math.round((imcSupplyCost + valleySupplyCost) * 100) / 100,
+      chaser_cost: Math.round(chaserCost * 100) / 100,
+      revenue_before_fees: Math.round(revenueBeforeCoupons * 100) / 100,
     }).select().single();
 
     if (brk) {
@@ -366,6 +371,95 @@ export default function Breaks() {
   // BOBA FORM MODAL
   if (bobaFormBreak) {
     const b = bobaFormBreak;
+    const revenueBeforeFeesAndCoupons = parseFloat(b.revenue_before_fees || "0") ||
+      parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE);
+    const whatnotFeesForBreak = revenueBeforeFeesAndCoupons * WHATNOT_FEE;
+    const totalSupplyCost = parseFloat(b.total_supply_cost || "0");
+    const streamExpensesText = `Coupon Total: $${parseFloat(b.coupon_total || "0").toFixed(2)}\nPromotion Total: $${parseFloat(b.promotion_total || "0").toFixed(2)}\nTips Received: $${parseFloat(bobaFormTips || "0").toFixed(2)}\nShipping Spend: $${totalSupplyCost.toFixed(2)}\nChasers: $${parseFloat(b.chaser_cost || "0").toFixed(2)}\nOther: `;
+
+    const fields = [
+      { label: "Break name", value: "ValleyHitHouse" },
+      { label: "Date of stream", value: b.date },
+      { label: "How many Hobby boxes", value: String(b.hobby_count || 0) },
+      { label: "How many Jumbo boxes", value: String(b.jumbo_hobby_count || 0) },
+      { label: "How many D-Mega boxes", value: String(b.double_mega_count || 0) },
+      { label: "Wonders product", value: "None" },
+      { label: "Other product", value: b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "None" },
+      { label: "Total revenue generated", value: revenueBeforeFeesAndCoupons.toFixed(2) },
+      { label: "Total Whatnot fees", value: whatnotFeesForBreak.toFixed(2) },
+      { label: "Stream expenses", value: streamExpensesText },
+      { label: "Sign off name", value: "Mitch Woodhurst" },
+    ];
+
+    return (
+      <div style={s.shell}>
+        <div style={s.content}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, paddingTop: 24 }}>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>BOBA Form — {b.box_name || b.date}</h1>
+              <p style={{ fontSize: 13, color: "#555" }}>Copy each field into the Google Form</p>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setBobaFormBreak(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
+              <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, width: "auto", padding: "10px 20px", textDecoration: "none", display: "inline-flex", alignItems: "center", marginTop: 0 }}>
+                Open BOBA Form ↗
+              </a>
+            </div>
+          </div>
+
+          {/* Tips input */}
+          <div style={{ ...s.section, borderColor: "#fb923c44" }}>
+            <div style={s.sectionTitle}>💰 Enter tips received (if any)</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ color: "#555", fontSize: 13 }}>$</span>
+              <input
+                style={{ ...s.input, maxWidth: 200 }}
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="0.00"
+                value={bobaFormTips}
+                onChange={e => setBobaFormTips(e.target.value)}
+              />
+              <span style={{ fontSize: 12, color: "#555" }}>This will be included in stream expenses</span>
+            </div>
+          </div>
+
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Form fields — click Copy to copy each field</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {fields.map((field, i) => (
+                <div key={i} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: 14 }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>{field.label}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ fontSize: 14, color: "#e5e5e5", fontWeight: 500, whiteSpace: "pre-wrap", flex: 1 }}>{field.value}</div>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(field.value)}
+                      style={{ fontSize: 11, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
+              Open BOBA Form ↗
+            </a>
+            <button
+              onClick={() => markBobaSubmitted(b.id)}
+              disabled={markingSubmitted === b.id}
+              style={{ ...s.submitBtn, flex: 1, background: "linear-gradient(135deg,#166534,#15803d)" }}>
+              {markingSubmitted === b.id ? "Saving..." : "✓ Mark as submitted to BOBA"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+    const b = bobaFormBreak;
     const streamExpenses = [
       b.imc_take !== null ? `Whatnot Promo: $${parseFloat(b.imc_take || "0").toFixed(2)}` : "",
       `Shipping Spend: $${parseFloat(b.box_value || "0").toFixed(2)}`,
@@ -373,19 +467,28 @@ export default function Breaks() {
       `Other: $0.00`,
     ].filter(Boolean).join("\n");
 
-    const fields = [
-      { label: "Break name", value: "ValleyHitHouse" },
-      { label: "Date of stream", value: b.date },
-      { label: "How many Hobby boxes", value: b.hobby_count || 0 },
-      { label: "How many Jumbo boxes", value: b.jumbo_hobby_count || 0 },
-      { label: "How many D-Mega boxes", value: b.double_mega_count || 0 },
-      { label: "Wonders product", value: "None" },
-      { label: "Other product", value: b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "None" },
-      { label: "Total revenue generated", value: `$${parseFloat(b.revenue || "0").toFixed(2)}` },
-      { label: "Total Whatnot fees", value: `$${(parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE) * WHATNOT_FEE).toFixed(2)}` },
-      { label: "Stream expenses", value: `Coupon Total: $${parseFloat(b.box_value || "0").toFixed(2)}\nPromotion Total: $0.00\nTips Received: $0.00\nShipping Spend: $0.00\nChasers: $0.00\nOther: $0.00` },
-      { label: "Sign off name", value: "ValleyHitHouse" },
-    ];
+    // Recalculate values for this break
+const breakRevenue = parseFloat(b.revenue || "0");
+const breakCoupon = 0; // stored separately — for now pulled from what we have
+const breakPromotion = 0; // stored separately
+// Total before fees and coupons = revenue / (1 - fee) then add back coupons
+const revenueBeforeFeesAndCoupons = breakRevenue / (1 - WHATNOT_FEE);
+const whatnotFeesForBreak = revenueBeforeFeesAndCoupons * WHATNOT_FEE;
+const chaserCostForBreak = 0; // from break chasers — stored in BreakChasers table
+
+const fields = [
+  { label: "Break name", value: "ValleyHitHouse" },
+  { label: "Date of stream", value: b.date },
+  { label: "How many Hobby boxes", value: b.hobby_count || 0 },
+  { label: "How many Jumbo boxes", value: b.jumbo_hobby_count || 0 },
+  { label: "How many D-Mega boxes", value: b.double_mega_count || 0 },
+  { label: "Wonders product", value: "None" },
+  { label: "Other product", value: b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "None" },
+  { label: "Total revenue generated", value: revenueBeforeFeesAndCoupons.toFixed(2) },
+  { label: "Total Whatnot fees", value: whatnotFeesForBreak.toFixed(2) },
+  { label: "Stream expenses", value: `Coupon Total: $${b.coupon_total ? parseFloat(b.coupon_total).toFixed(2) : "0.00"}\nPromotion Total: $${b.promotion_total ? parseFloat(b.promotion_total).toFixed(2) : "0.00"}\nTips Received: $${bobaFormTips}\nShipping Spend: $${b.total_supply_cost ? parseFloat(b.total_supply_cost).toFixed(2) : "0.00"}\nChasers: $${b.chaser_cost ? parseFloat(b.chaser_cost).toFixed(2) : "0.00"}\nOther: ` },
+  { label: "Sign off name", value: "Mitch Woodhurst" },
+];
 
     return (
       <div style={s.shell}>
