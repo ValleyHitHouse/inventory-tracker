@@ -70,8 +70,7 @@ export default function AnalyticsPage() {
   const totalCouponCost = filtered.reduce((s, b) => s + parseFloat(b.coupon_total || "0"), 0);
   const totalPromoCost = filtered.reduce((s, b) => s + parseFloat(b.promotion_total || "0"), 0);
   const totalChaserCost = filtered.reduce((s, b) => s + parseFloat(b.chaser_cost || "0"), 0);
-  const totalExpenses = totalSupplyCost + totalCouponCost + totalPromoCost + totalChaserCost;
-
+const totalExpenses = totalSupplyCost + totalPromoCost + totalChaserCost;
   // Top buyers — filtered by period
   const buyerMap: Record<string, number> = {};
   filteredOrders.forEach(o => {
@@ -188,12 +187,18 @@ export default function AnalyticsPage() {
                 <div style={s.expenseRow}><span style={{ color: "#777" }}>Promotion spend</span><span style={{ color: "#f87171" }}>${totalPromoCost.toFixed(2)}</span></div>
                 <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#777" }}>Chaser card costs</span><span style={{ color: "#f87171" }}>${totalChaserCost.toFixed(2)}</span></div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", background: "#0f0f0f", borderRadius: 10, padding: 20 }}>
-                <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Total expenses</div>
-                <div style={{ fontSize: 36, fontWeight: 800, color: "#f87171" }}>${totalExpenses.toFixed(2)}</div>
-                {totalRevenue > 0 && <div style={{ fontSize: 12, color: "#555", marginTop: 8 }}>{((totalExpenses / totalRevenue) * 100).toFixed(1)}% of revenue</div>}
-                <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>across {filtered.length} break{filtered.length !== 1 ? "s" : ""}</div>
-              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+  <div style={{ background: "#0f0f0f", borderRadius: 10, padding: 16, textAlign: "center" }}>
+    <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>Total expenses</div>
+    <div style={{ fontSize: 28, fontWeight: 800, color: "#f87171" }}>${totalExpenses.toFixed(2)}</div>
+    {totalRevenue > 0 && <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{((totalExpenses / totalRevenue) * 100).toFixed(1)}% of revenue</div>}
+  </div>
+  <div style={{ background: "#0f0f0f", borderRadius: 10, padding: 16, textAlign: "center" }}>
+    <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>Coupon total</div>
+    <div style={{ fontSize: 28, fontWeight: 800, color: "#fb923c" }}>${totalCouponCost.toFixed(2)}</div>
+    <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>not included in expenses</div>
+  </div>
+</div>
             </div>
           </div>
 
