@@ -462,8 +462,7 @@ export default function Breaks() {
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead><tr style={{ background: "#0f0f0f" }}>
-                {["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take","BOBA Form",""].map(h => (
-                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
+{["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take","BOBA Form","View",""].map(h => (                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
@@ -486,6 +485,9 @@ export default function Breaks() {
                         </button>
                       )}
                     </td>
+                    <td style={{ padding: "10px 14px" }}>
+  <a href={`/breaks/${b.id}`} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 10px", cursor: "pointer", textDecoration: "none" }}>View</a>
+</td>
                     <td style={{ padding: "10px 14px" }}>
                       {confirmId === b.id ? (
                         <div style={{ display: "flex", gap: 6 }}>
