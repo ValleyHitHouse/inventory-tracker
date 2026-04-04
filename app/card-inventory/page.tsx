@@ -32,28 +32,23 @@ const weaponColors: Record<string, string> = {
 };
 
 const subsetToInventoryId: Record<string, number> = {
-  "Chasers": 4,
-  "Insurance": 3,
-  "First Timers": 2,
+  "Chasers": 4, "Insurance": 3, "First Timers": 2,
 };
 
 export default function CardInventoryPage() {
-  const [view, setView] = useState<"inventory"|"intake"|"lots">("inventory");
+  const [view, setView] = useState<"inventory"|"add">("inventory");
   const [giveawayTotal, setGiveawayTotal] = useState(0);
   const [inventory, setInventory] = useState<any[]>([]);
-  const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deletingLotId, setDeletingLotId] = useState<number | null>(null);
-  const [confirmLotId, setConfirmLotId] = useState<number | null>(null);
 
-  const [lotName, setLotName] = useState("");
-  const [giveawayCount, setGiveawayCount] = useState(0);
-  const [giveawayTotalPrice, setGiveawayTotalPrice] = useState("");
+  // Add card form
   const [selectedSet, setSelectedSet] = useState(0);
   const [allCards, setAllCards] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
   const [activeSubset, setActiveSubset] = useState("Chasers");
   const [picked, setPicked] = useState<Record<string, {card: any, qty: number, subset: string, pricePaid: string}>>({});
+  const [giveawayCount, setGiveawayCount] = useState(0);
+  const [giveawayPriceEach, setGiveawayPriceEach] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadInventory(); }, []);
@@ -70,8 +65,6 @@ export default function CardInventoryPage() {
     if (gt) setGiveawayTotal(gt.total);
     const { data: inv } = await supabase.from("cardinventory").select("*").order("subset").order("created_at", { ascending: false });
     if (inv) setInventory(inv);
-    const { data: lotsData } = await supabase.from("cardlots").select("*").order("created_at", { ascending: false });
-    if (lotsData) setLots(lotsData);
     setLoading(false);
   }
 
@@ -101,35 +94,20 @@ export default function CardInventoryPage() {
     setPicked(prev => ({ ...prev, [key]: { ...prev[key], pricePaid: price } }));
   }
 
-  async function deleteLot(lot: any) {
-    setDeletingLotId(lot.id);
-    if (lot.giveaway_count > 0) {
-      await supabase.from("giveawaytotal").update({ total: Math.max(0, giveawayTotal - lot.giveaway_count) }).eq("id", 1);
-      const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
-      if (giv) await supabase.from("Inventory").update({ quantity: Math.max(0, giv.quantity - lot.giveaway_count) }).eq("id", 1);
+  async function saveCards() {
+    if (Object.keys(picked).length === 0 && giveawayCount === 0) {
+      return alert("Please add at least one card or giveaway cards!");
     }
-    await supabase.from("cardlots").delete().eq("id", lot.id);
-    setDeletingLotId(null);
-    setConfirmLotId(null);
-    loadInventory();
-  }
-
-  async function saveIntake() {
-    if (!lotName) return alert("Please enter a lot name!");
     setSaving(true);
 
-    await supabase.from("cardlots").insert({
-      lot_name: lotName,
-      giveaway_count: giveawayCount,
-      price_per_card: parseFloat(giveawayTotalPrice || "0"),
-    });
-
+    // Add giveaway cards
     if (giveawayCount > 0) {
       await supabase.from("giveawaytotal").update({ total: giveawayTotal + giveawayCount }).eq("id", 1);
       const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
       if (giv) await supabase.from("Inventory").update({ quantity: giv.quantity + giveawayCount }).eq("id", 1);
     }
 
+    // Add specific cards
     const rows = Object.values(picked).map(({ card, qty, subset, pricePaid }) => ({
       subset,
       card_number: card["Card #"],
@@ -143,6 +121,7 @@ export default function CardInventoryPage() {
     }));
     if (rows.length > 0) await supabase.from("cardinventory").insert(rows);
 
+    // Update main inventory counts
     for (const subset of SUBSETS) {
       const totalForSubset = Object.values(picked)
         .filter(p => p.subset === subset)
@@ -157,7 +136,7 @@ export default function CardInventoryPage() {
     await loadInventory();
     setSaving(false);
     setView("inventory");
-    setLotName(""); setGiveawayCount(0); setGiveawayTotalPrice(""); setPicked({}); setCardSearch("");
+    setPicked({}); setCardSearch(""); setGiveawayCount(0); setGiveawayPriceEach("");
   }
 
   const s = {
@@ -170,146 +149,54 @@ export default function CardInventoryPage() {
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
     th: { padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" },
     td: { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
-    tabBtn: (active: boolean) => ({ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${active ? "#fb923c" : "#222"}`, background: active ? "#fb923c22" : "#111", color: active ? "#fb923c" : "#555" }),
   };
 
   const groupedInventory = SUBSETS.reduce((acc, sub) => {
-acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
+    acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
     return acc;
   }, {} as Record<string, any[]>);
 
-  // LOTS VIEW
-  if (view === "lots") return (
+  // ADD CARD VIEW
+  if (view === "add") return (
     <div style={s.shell}>
       <div style={s.content}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Lot History</h1>
-            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>{lots.length} lots logged</p>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setView("inventory")} style={s.tabBtn(false)}>← Back</button>
-            <button onClick={() => setView("intake")} style={s.submitBtn}>+ Log card lot</button>
-          </div>
-        </div>
-        {lots.length === 0 ? (
-          <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
-            <p style={{ color: "#555", fontSize: 13 }}>No lots logged yet.</p>
-          </div>
-        ) : (
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#0f0f0f" }}>
-                  <th style={s.th}>Lot name</th>
-                  <th style={s.th}>Giveaway cards</th>
-                  <th style={s.th}>Giveaway total price</th>
-                  <th style={s.th}>Date logged</th>
-                  <th style={s.th}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {lots.map((lot, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
-                    <td style={{ ...s.td, color: "#e5e5e5", fontWeight: 600 }}>{lot.lot_name}</td>
-                    <td style={{ ...s.td, color: "#4ade80" }}>{lot.giveaway_count}</td>
-                    <td style={{ ...s.td, color: "#fb923c" }}>{lot.price_per_card ? `$${parseFloat(lot.price_per_card).toFixed(2)}` : "—"}</td>
-                    <td style={{ ...s.td, color: "#555" }}>{new Date(lot.created_at).toLocaleDateString()}</td>
-                    <td style={{ ...s.td }}>
-                      {confirmLotId === lot.id ? (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            onClick={() => deleteLot(lot)}
-                            disabled={deletingLotId === lot.id}
-                            style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
-                            {deletingLotId === lot.id ? "Deleting..." : "Confirm"}
-                          </button>
-                          <button
-                            onClick={() => setConfirmLotId(null)}
-                            style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmLotId(lot.id)}
-                          style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // INTAKE VIEW
-  if (view === "intake") return (
-    <div style={s.shell}>
-      <div style={s.content}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Log Card Lot</h1>
-            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Add cards from a new lot to your inventory</p>
+            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Add cards manually</h1>
+            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Search the database and add cards to your inventory</p>
           </div>
           <button onClick={() => setView("inventory")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
 
+        {/* Giveaway cards */}
         <div style={s.section}>
-          <div style={s.sectionTitle}>Lot details</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <div style={s.sectionTitle}>🎁 Giveaway cards</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Lot name</label>
-              <input style={s.input} placeholder="e.g. Griffey Lot - April 1" value={lotName} onChange={e => setLotName(e.target.value)} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Giveaway cards in this lot</label>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Number of giveaway cards</label>
               <input style={s.input} type="number" min={0} value={giveawayCount} onChange={e => setGiveawayCount(Number(e.target.value))} />
             </div>
             <div>
-              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Total price paid for giveaways ($)</label>
-              <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 125.00" value={giveawayTotalPrice} onChange={e => setGiveawayTotalPrice(e.target.value)} />
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Price paid per giveaway card ($)</label>
+              <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 1.50" value={giveawayPriceEach} onChange={e => setGiveawayPriceEach(e.target.value)} />
             </div>
           </div>
         </div>
 
+        {/* Card picker */}
         <div style={s.section}>
-          <div style={s.sectionTitle}>Add specific cards</div>
-
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div style={s.sectionTitle}>Search & add specific cards</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             {SETS.map((set, i) => (
-              <button key={i} onClick={() => setSelectedSet(i)} style={{
-                padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${selectedSet === i ? "#fb923c" : "#222"}`,
-                background: selectedSet === i ? "#fb923c22" : "#0f0f0f",
-                color: selectedSet === i ? "#fb923c" : "#555",
-              }}>{set.label}</button>
+              <button key={i} onClick={() => setSelectedSet(i)} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${selectedSet === i ? "#fb923c" : "#222"}`, background: selectedSet === i ? "#fb923c22" : "#0f0f0f", color: selectedSet === i ? "#fb923c" : "#555" }}>{set.label}</button>
             ))}
           </div>
-
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             {SUBSETS.map(sub => (
-              <button key={sub} onClick={() => setActiveSubset(sub)} style={{
-                padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                border: `1px solid ${activeSubset === sub ? "#a78bfa" : "#222"}`,
-                background: activeSubset === sub ? "#a78bfa22" : "#0f0f0f",
-                color: activeSubset === sub ? "#a78bfa" : "#555",
-              }}>{sub}</button>
+              <button key={sub} onClick={() => setActiveSubset(sub)} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${activeSubset === sub ? "#a78bfa" : "#222"}`, background: activeSubset === sub ? "#a78bfa22" : "#0f0f0f", color: activeSubset === sub ? "#a78bfa" : "#555" }}>{sub}</button>
             ))}
           </div>
-
-          <input
-            style={{ ...s.input, marginBottom: 12 }}
-            placeholder="🔍 Search by hero, athlete, card #, treatment..."
-            value={cardSearch}
-            onChange={e => setCardSearch(e.target.value)}
-          />
-
+          <input style={{ ...s.input, marginBottom: 12 }} placeholder="🔍 Search by hero, athlete, card #, treatment, weapon..." value={cardSearch} onChange={e => setCardSearch(e.target.value)} />
           <div style={{ maxHeight: 320, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8 }}>
             {filteredCards.length === 0 ? (
               <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>Type to search cards</div>
@@ -317,11 +204,7 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
               const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
               const isPicked = !!picked[key];
               return (
-                <div key={i} onClick={() => pickCard(card)} style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "10px 14px", borderBottom: "1px solid #161616", cursor: "pointer",
-                  background: isPicked ? "#a78bfa11" : "transparent",
-                }}>
+                <div key={i} onClick={() => pickCard(card)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616", cursor: "pointer", background: isPicked ? "#a78bfa11" : "transparent" }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
@@ -330,18 +213,17 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
                     {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
                     {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                   </div>
-                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8 }}>
-                    {isPicked ? `✓ ${picked[key].qty} added` : "+ Add"}
-                  </span>
+                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8 }}>{isPicked ? `✓ ${picked[key].qty} added` : "+ Add"}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
+        {/* Picked cards */}
         {Object.keys(picked).length > 0 && (
           <div style={s.section}>
-            <div style={s.sectionTitle}>Cards in this lot — enter price paid per card</div>
+            <div style={s.sectionTitle}>Cards to add — enter price paid per card</div>
             {Object.entries(picked).map(([key, { card, qty, subset, pricePaid }]) => (
               <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #161616" }}>
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
@@ -351,21 +233,11 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
                   <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                   {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
                   {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
-                  {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <span style={{ fontSize: 11, color: "#555" }}>$</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      placeholder="Price paid"
-                      value={pricePaid}
-                      onClick={e => e.stopPropagation()}
-                      onChange={e => { e.stopPropagation(); updatePrice(key, e.target.value); }}
-                      style={s.smallInput}
-                    />
+                    <input type="number" min={0} step="0.01" placeholder="Price paid" value={pricePaid} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); updatePrice(key, e.target.value); }} style={s.smallInput} />
                     <span style={{ fontSize: 11, color: "#555" }}>each</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -376,20 +248,11 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
                 </div>
               </div>
             ))}
-            <div style={{ marginTop: 16, padding: "12px 16px", background: "#0f0f0f", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#555" }}>Total cost this lot</span>
-              <span style={{ fontSize: 18, fontWeight: 700, color: "#fb923c" }}>
-                ${(
-                  parseFloat(giveawayTotalPrice || "0") +
-                  Object.values(picked).reduce((sum, { qty, pricePaid }) => sum + qty * parseFloat(pricePaid || "0"), 0)
-                ).toFixed(2)}
-              </span>
-            </div>
           </div>
         )}
 
-        <button style={s.submitBtn} onClick={saveIntake} disabled={saving}>
-          {saving ? "Saving..." : "Save lot to inventory"}
+        <button style={{ ...s.submitBtn, width: "100%" }} onClick={saveCards} disabled={saving}>
+          {saving ? "Saving..." : "Add to inventory"}
         </button>
       </div>
     </div>
@@ -402,20 +265,18 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Card Inventory</h1>
-            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Track your BOBA card stock</p>
+            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Cards received from lot comps + manual additions</p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setView("lots")} style={s.tabBtn(false)}>📋 Lot history</button>
-            <button onClick={() => setView("intake")} style={s.submitBtn}>+ Log card lot</button>
-          </div>
+          <button onClick={() => setView("add")} style={s.submitBtn}>+ Add cards manually</button>
         </div>
 
+        {/* Giveaway total */}
         <div style={{ ...s.section, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Total giveaway cards</div>
             <div style={{ fontSize: 36, fontWeight: 800, color: "#4ade80" }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
           </div>
-          <div style={{ fontSize: 12, color: "#333" }}>Running total across all lots</div>
+          <div style={{ fontSize: 12, color: "#333" }}>Auto-updated from lot comps + manual additions</div>
         </div>
 
         {loading ? <p style={{ color: "#555" }}>Loading...</p> : SUBSETS.map(sub => (
@@ -426,9 +287,9 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
                 {groupedInventory[sub]?.reduce((s, i) => s + i.quantity, 0) || 0} cards
               </span>
             </div>
-            {groupedInventory[sub]?.length === 0 ? (
+            {!groupedInventory[sub] || groupedInventory[sub].length === 0 ? (
               <div style={{ ...s.section, textAlign: "center", padding: 24 }}>
-                <p style={{ color: "#555", fontSize: 13 }}>No {sub} logged yet</p>
+                <p style={{ color: "#555", fontSize: 13 }}>No {sub} in inventory</p>
               </div>
             ) : (
               <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
@@ -441,8 +302,7 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
                       <th style={s.th}>Treatment</th>
                       <th style={s.th}>Set</th>
                       <th style={s.th}>Weapon</th>
-                      <th style={s.th}>Power</th>
-                      <th style={s.th}>Price Paid</th>
+                      <th style={s.th}>Price paid</th>
                       <th style={s.th}>Qty</th>
                     </tr>
                   </thead>
@@ -454,16 +314,11 @@ acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
                         <td style={{ ...s.td, color: "#a78bfa" }}>{item.athlete}</td>
                         <td style={{ ...s.td, color: "#777" }}>{item.variation}</td>
                         <td style={{ ...s.td, color: "#555", fontSize: 12 }}>{item.set_name}</td>
-                        <td style={{ ...s.td }}>
-                          {item.weapon && (
-                            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>
-                              {item.weapon}
-                            </span>
-                          )}
+                        <td style={s.td}>
+                          {item.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
                         </td>
-                        <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.power}</td>
                         <td style={{ ...s.td, color: "#fb923c", fontWeight: 600 }}>{item.price_paid ? `$${parseFloat(item.price_paid).toFixed(2)}` : "—"}</td>
-                        <td style={{ ...s.td, color: "#fb923c", fontWeight: 600 }}>{item.quantity}</td>
+                        <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.quantity}</td>
                       </tr>
                     ))}
                   </tbody>
