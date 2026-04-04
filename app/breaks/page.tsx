@@ -9,6 +9,13 @@ const VALLEY_SPLIT = 0.30;
 const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "Bubble mailers", "Boxes (S)", "Boxes (M)", "Boxes (L)", "MagPros"];
 const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "Shipping labels", "Packing tape", "Packing paper"];
 
+const BOX_TYPES = [
+  { key: "jumbo_hobby_count", label: "Jumbo Hobby", settingsKey: "jumbo_hobby_price" },
+  { key: "hobby_count", label: "Hobby", settingsKey: "hobby_price" },
+  { key: "double_mega_count", label: "Double Mega", settingsKey: "double_mega_price" },
+  { key: "blaster_count", label: "Blaster", settingsKey: "blaster_price" },
+];
+
 function parseCSV(text: string) {
   const lines = text.trim().split("\n");
   const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
@@ -35,19 +42,15 @@ function calcSupplyEstimates(csvData: any[]) {
   for (const row of csvData) {
     if (parseFloat(row.original_item_price || "0") > 0) payingBuyers.add(row.buyer_username);
   }
-
   const estimates: Record<string, number> = {
     "Armalopes": 0, "Toploaders": 0, "Penny sleeves": 0,
     "Giveaway cards": 0, "Team bags": 0, "Bubble mailers": 0,
     "Stickers": 0, "Boxes (S)": 0,
   };
-
   const buyerOrderCounts: Record<string, number> = {};
-
   for (const row of csvData) {
     const price = parseFloat(row.original_item_price || "0");
     const buyer = row.buyer_username;
-
     if (price === 0) {
       estimates["Toploaders"] += 1;
       estimates["Penny sleeves"] += 1;
@@ -83,13 +86,18 @@ export default function Breaks() {
   const [view, setView] = useState<"list"|"new">("list");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [boxName, setBoxName] = useState("");
-  const [numBoxes, setNumBoxes] = useState(1);
+  const [boxCounts, setBoxCounts] = useState<Record<string, number>>({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
   const [promotionTotal, setPromotionTotal] = useState("");
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvName, setCsvName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [bobaFormBreak, setBobaFormBreak] = useState<any>(null);
+  const [markingSubmitted, setMarkingSubmitted] = useState<number | null>(null);
+
+  // Market prices from settings
+  const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
 
   const [cardInventory, setCardInventory] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
@@ -106,6 +114,7 @@ export default function Breaks() {
     loadBreaks();
     loadCardInventory();
     loadInventoryPrices();
+    loadMarketPrices();
   }, []);
 
   useEffect(() => {
@@ -139,6 +148,15 @@ export default function Breaks() {
     }
   }
 
+  async function loadMarketPrices() {
+    const { data } = await supabase.from("settings").select("key, value");
+    if (data) {
+      const prices: Record<string, number> = {};
+      for (const row of data) prices[row.key] = parseFloat(row.value || "0");
+      setMarketPrices(prices);
+    }
+  }
+
   async function deleteBreak(id: number) {
     setDeletingId(id);
     await supabase.from("BreakOrders").delete().eq("break_id", id);
@@ -150,6 +168,20 @@ export default function Breaks() {
     loadBreaks();
   }
 
+  async function markBobaSubmitted(id: number) {
+    setMarkingSubmitted(id);
+    await supabase.from("Breaks").update({ boba_submitted: true }).eq("id", id);
+    setBreaks(prev => prev.map(b => b.id === id ? { ...b, boba_submitted: true } : b));
+    setMarkingSubmitted(null);
+    setBobaFormBreak(null);
+  }
+
+  // Box calculations
+  const totalBoxes = Object.values(boxCounts).reduce((s, v) => s + v, 0);
+  const marketValue = BOX_TYPES.reduce((sum, bt) => {
+    return sum + (boxCounts[bt.key] || 0) * (marketPrices[bt.settingsKey] || 0);
+  }, 0);
+
   // Revenue
   const revenueBeforeCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0") + parseFloat(r.coupon_price || "0"), 0);
   const couponTotal = csvData.reduce((s, r) => s + parseFloat(r.coupon_price || "0"), 0);
@@ -158,54 +190,36 @@ export default function Breaks() {
   const revenueAfterFees = revenueAfterCoupons - whatnotFees;
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
   const freeGiveaways = csvData.filter(r => parseFloat(r.original_item_price || "0") === 0).length;
+  const percentToMarket = marketValue > 0 ? (revenueAfterCoupons / marketValue) * 100 : 0;
 
-  // Card costs by subset
+  // Card costs
   const chaserCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Chasers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const insuranceCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Insurance").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const firstTimerCost = Object.values(pickedCards).filter(({ item }) => item.subset === "First Timers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
 
-  // Supply costs — using editedEstimates + magPros combined
   const allEstimates: Record<string, number> = { ...editedEstimates, ...(magPros ? { "MagPros": parseInt(magPros) } : {}) };
 
   function getSupplyCost(name: string, qty: number): number {
     return (inventoryPrices[name] || 0) * qty;
   }
 
-  // IMC supplies cost (includes MagPros via allEstimates)
-  const imcSupplyCost = Object.entries(allEstimates)
-    .filter(([name]) => IMC_SUPPLIES.includes(name))
-    .reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
-
-  // Valley supplies cost (stickers etc)
-  const valleySupplyCost = Object.entries(allEstimates)
-    .filter(([name]) => VALLEY_SUPPLIES.includes(name))
-    .reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
-
-  // Giveaway card cost (Valley only)
+  const imcSupplyCost = Object.entries(allEstimates).filter(([name]) => IMC_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
+  const valleySupplyCost = Object.entries(allEstimates).filter(([name]) => VALLEY_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
   const giveawayCardCost = getSupplyCost("Giveaway cards", allEstimates["Giveaway cards"] || 0);
-
-  // Shared expenses (IMC 70% / Valley 30%)
   const sharedExpenses = imcSupplyCost + chaserCost + couponTotal + parseFloat(promotionTotal || "0");
   const imcShareOfExpenses = sharedExpenses * IMC_SPLIT;
   const valleyShareOfExpenses = sharedExpenses * VALLEY_SPLIT;
-
-  // Valley only expenses
   const valleyOnlyExpenses = valleySupplyCost + insuranceCost + firstTimerCost + giveawayCardCost;
-
-  // Total expenses
   const totalExpenses = sharedExpenses + valleyOnlyExpenses;
-
-  // Profit after all expenses
   const profitAfterExpenses = revenueAfterFees - totalExpenses;
-
-  // IMC/Valley split
   const imcTake = profitAfterExpenses * IMC_SPLIT;
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
 
   const filteredCardInventory = cardInventory.filter(c => {
     if (c.quantity <= 0) return false;
-    const q = cardSearch.toLowerCase();
-    return !q || c.hero?.toLowerCase().includes(q) || c.athlete?.toLowerCase().includes(q) || c.card_number?.toLowerCase().includes(q) || c.subset?.toLowerCase().includes(q);
+    const q = cardSearch.toLowerCase().trim();
+    const combined = [c.hero, c.athlete, c.card_number, c.subset, c.weapon, c.variation].join(" ").toLowerCase();
+    return !q || q.split(" ").filter(Boolean).every(word => combined.includes(word));
   }).slice(0, 50);
 
   function pickCard(item: any) {
@@ -256,13 +270,20 @@ export default function Breaks() {
   async function saveBreak() {
     setSaving(true);
     const { data: brk } = await supabase.from("Breaks").insert({
-      date, box_name: boxName, num_boxes: numBoxes,
+      date, box_name: boxName,
+      num_boxes: totalBoxes,
+      jumbo_hobby_count: boxCounts.jumbo_hobby_count,
+      hobby_count: boxCounts.hobby_count,
+      double_mega_count: boxCounts.double_mega_count,
+      blaster_count: boxCounts.blaster_count,
+      market_value: Math.round(marketValue * 100) / 100,
       box_value: 0,
       revenue: Math.round(revenueAfterFees * 100) / 100,
       spots_sold: spotsSold, free_giveaways: freeGiveaways,
       net_profit: Math.round(profitAfterExpenses * 100) / 100,
       imc_take: Math.round(imcTake * 100) / 100,
       valley_take: Math.round(valleyTake * 100) / 100,
+      boba_submitted: false,
     }).select().single();
 
     if (brk) {
@@ -291,14 +312,12 @@ export default function Breaks() {
           }
         }
       }
-
       if (freeGiveaways > 0) {
         const { data: gt } = await supabase.from("giveawaytotal").select("total").single();
         if (gt) await supabase.from("giveawaytotal").update({ total: Math.max(0, gt.total - freeGiveaways) }).eq("id", 1);
         const { data: givInv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
         if (givInv) await supabase.from("Inventory").update({ quantity: Math.max(0, givInv.quantity - freeGiveaways) }).eq("id", 1);
       }
-
       if (csvData.length) {
         const orderRows = csvData.map(r => ({
           break_id: brk.id,
@@ -321,7 +340,8 @@ export default function Breaks() {
     await loadCardInventory();
     setSaving(false);
     setView("list");
-    setCsvData([]); setCsvName(""); setBoxName(""); setNumBoxes(1);
+    setCsvData([]); setCsvName(""); setBoxName("");
+    setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
     setPickedCards({}); setCardSearch("");
     setSupplyEstimates({}); setEditedEstimates({});
     setMagPros(""); setSuppliesDeducted(false); setPromotionTotal("");
@@ -343,6 +363,81 @@ export default function Breaks() {
     expenseRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #161616", fontSize: 13 },
   };
 
+  // BOBA FORM MODAL
+  if (bobaFormBreak) {
+    const b = bobaFormBreak;
+    const streamExpenses = [
+      b.imc_take !== null ? `Whatnot Promo: $${parseFloat(b.imc_take || "0").toFixed(2)}` : "",
+      `Shipping Spend: $${parseFloat(b.box_value || "0").toFixed(2)}`,
+      `Chasers: $0.00`,
+      `Other: $0.00`,
+    ].filter(Boolean).join("\n");
+
+    const fields = [
+      { label: "Break name", value: "ValleyHitHouse" },
+      { label: "Date of stream", value: b.date },
+      { label: "How many Hobby boxes", value: b.hobby_count || 0 },
+      { label: "How many Jumbo boxes", value: b.jumbo_hobby_count || 0 },
+      { label: "How many D-Mega boxes", value: b.double_mega_count || 0 },
+      { label: "Wonders product", value: "None" },
+      { label: "Other product", value: b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "None" },
+      { label: "Total revenue generated", value: `$${parseFloat(b.revenue || "0").toFixed(2)}` },
+      { label: "Total Whatnot fees", value: `$${(parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE) * WHATNOT_FEE).toFixed(2)}` },
+      { label: "Stream expenses", value: `Coupon Total: $${parseFloat(b.box_value || "0").toFixed(2)}\nPromotion Total: $0.00\nTips Received: $0.00\nShipping Spend: $0.00\nChasers: $0.00\nOther: $0.00` },
+      { label: "Sign off name", value: "ValleyHitHouse" },
+    ];
+
+    return (
+      <div style={s.shell}>
+        <div style={s.content}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, paddingTop: 24 }}>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>BOBA Form — {b.box_name || b.date}</h1>
+              <p style={{ fontSize: 13, color: "#555" }}>Copy each field into the Google Form</p>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setBobaFormBreak(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
+              <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, width: "auto", padding: "10px 20px", textDecoration: "none", display: "inline-flex", alignItems: "center", marginTop: 0 }}>
+                Open BOBA Form ↗
+              </a>
+            </div>
+          </div>
+
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Form fields — click any field to copy</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {fields.map((field, i) => (
+                <div key={i} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: 14 }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>{field.label}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ fontSize: 14, color: "#e5e5e5", fontWeight: 500, whiteSpace: "pre-wrap", flex: 1 }}>{field.value}</div>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(String(field.value))}
+                      style={{ fontSize: 11, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
+              Open BOBA Form ↗
+            </a>
+            <button
+              onClick={() => markBobaSubmitted(b.id)}
+              disabled={markingSubmitted === b.id}
+              style={{ ...s.submitBtn, flex: 1, background: "linear-gradient(135deg,#166534,#15803d)" }}>
+              {markingSubmitted === b.id ? "Saving..." : "✓ Mark as submitted to BOBA"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (view === "list") return (
     <div style={s.shell}>
       <div style={s.content}>
@@ -361,19 +456,28 @@ export default function Breaks() {
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead><tr style={{ background: "#0f0f0f" }}>
-                {["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take",""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>)}
+                {["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take","BOBA Form",""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {breaks.map(b => (
                   <tr key={b.id} style={{ borderBottom: "1px solid #161616" }}>
                     <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.date}</td>
                     <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.box_name || "—"}</td>
-                    <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.num_boxes}</td>
+                    <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.num_boxes || 0}</td>
                     <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.spots_sold}</td>
                     <td style={{ padding: "10px 14px", color: "#4ade80" }}>${b.revenue?.toFixed(2)}</td>
                     <td style={{ padding: "10px 14px", color: b.net_profit >= 0 ? "#a78bfa" : "#f87171", fontWeight: 600 }}>${b.net_profit?.toFixed(2)}</td>
                     <td style={{ padding: "10px 14px", color: "#fb923c" }}>{b.imc_take ? `$${parseFloat(b.imc_take).toFixed(2)}` : "—"}</td>
                     <td style={{ padding: "10px 14px", color: "#4ade80" }}>{b.valley_take ? `$${parseFloat(b.valley_take).toFixed(2)}` : "—"}</td>
+                    <td style={{ padding: "10px 14px" }}>
+                      {b.boba_submitted ? (
+                        <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Submitted</span>
+                      ) : (
+                        <button onClick={() => setBobaFormBreak(b)} style={{ fontSize: 11, background: "#fb923c22", border: "1px solid #fb923c", color: "#fb923c", borderRadius: 5, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>
+                          Submit to BOBA
+                        </button>
+                      )}
+                    </td>
                     <td style={{ padding: "10px 14px" }}>
                       {confirmId === b.id ? (
                         <div style={{ display: "flex", gap: 6 }}>
@@ -408,9 +512,40 @@ export default function Breaks() {
             <div><label style={s.label}>Date of break</label><input style={s.input} type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
             <div><label style={s.label}>Box product name</label><input style={s.input} type="text" placeholder="e.g. Griffey Break" value={boxName} onChange={e => setBoxName(e.target.value)} /></div>
           </div>
-          <div style={s.row}>
-            <div><label style={s.label}>Number of boxes</label><input style={s.input} type="number" min={1} value={numBoxes} onChange={e => setNumBoxes(Number(e.target.value))} /></div>
-            <div><label style={s.label}>Promotion total ($)</label><input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} /></div>
+          <div><label style={s.label}>Promotion total ($)</label><input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} /></div>
+        </div>
+
+        {/* Box types */}
+        <div style={s.section}>
+          <div style={s.sectionTitle}>Box breakdown</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+            {BOX_TYPES.map(bt => (
+              <div key={bt.key}>
+                <label style={s.label}>{bt.label}</label>
+                <input
+                  style={s.input}
+                  type="number"
+                  min={0}
+                  value={boxCounts[bt.key] || 0}
+                  onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))}
+                />
+                {marketPrices[bt.settingsKey] > 0 && (
+                  <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>
+                    Market: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={s.stat}>
+              <div style={s.statLabel}>Total boxes</div>
+              <div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div>
+            </div>
+            <div style={s.stat}>
+              <div style={s.statLabel}>Total market value</div>
+              <div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div>
+            </div>
           </div>
         </div>
 
@@ -474,7 +609,6 @@ export default function Breaks() {
             <div style={{ fontSize: 13, color: csvName ? "#4ade80" : "#888", marginBottom: 4 }}>{csvName || "Drop your Whatnot CSV here or click to browse"}</div>
             <div style={{ fontSize: 11, color: "#444" }}>{csvData.length > 0 ? `${csvData.length} orders detected` : "Exported from Whatnot → Sales → Download CSV"}</div>
           </label>
-
           {csvData.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 10 }}>Revenue breakdown</div>
@@ -484,10 +618,11 @@ export default function Breaks() {
                 <div style={s.stat}><div style={s.statLabel}>Whatnot fees (11.2%)</div><div style={{ ...s.statValue, color: "#f87171" }}>-${whatnotFees.toFixed(2)}</div></div>
                 <div style={s.stat}><div style={s.statLabel}>After fees</div><div style={{ ...s.statValue, color: "#4ade80" }}>${revenueAfterFees.toFixed(2)}</div></div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
                 <div style={s.stat}><div style={s.statLabel}>Spots sold</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{spotsSold}</div></div>
                 <div style={s.stat}><div style={s.statLabel}>Free giveaways</div><div style={{ ...s.statValue, color: "#fb923c" }}>{freeGiveaways}</div></div>
                 <div style={s.stat}><div style={s.statLabel}>Total orders</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{csvData.length}</div></div>
+                <div style={s.stat}><div style={s.statLabel}>% to market</div><div style={{ ...s.statValue, color: percentToMarket >= 100 ? "#4ade80" : "#fb923c" }}>{marketValue > 0 ? `${percentToMarket.toFixed(1)}%` : "—"}</div></div>
               </div>
             </div>
           )}
@@ -501,7 +636,6 @@ export default function Breaks() {
               {suppliesDeducted && <span style={{ fontSize: 12, color: "#4ade80" }}>✓ Deducted from inventory</span>}
             </div>
             <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Auto-calculated from CSV — edit if needed, then click deduct</p>
-
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
               {Object.entries(editedEstimates).map(([name, qty]) => (
                 <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 14px" }}>
@@ -516,7 +650,6 @@ export default function Breaks() {
                   </div>
                 </div>
               ))}
-
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: `1px solid ${!magPros ? "#7c3aed" : "#1e1e1e"}`, borderRadius: 8, padding: "10px 14px" }}>
                 <div>
                   <span style={{ fontSize: 13, color: "#aaa" }}>MagPros</span>
@@ -526,8 +659,6 @@ export default function Breaks() {
                 <input type="number" min={0} placeholder="?" value={magPros} onChange={e => setMagPros(e.target.value)} style={{ ...s.smallInput, border: !magPros ? "1px solid #7c3aed" : "1px solid #222" }} />
               </div>
             </div>
-
-            {/* Add extra supply */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>Add extra supply</div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -550,81 +681,56 @@ export default function Breaks() {
                 </button>
               </div>
             </div>
-
             <button onClick={deductSuppliesFromInventory} disabled={deductingSupplies || suppliesDeducted || !magPros} style={{ width: "100%", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, cursor: suppliesDeducted || !magPros ? "not-allowed" : "pointer", marginTop: 4, background: suppliesDeducted ? "#1a3a1a" : "linear-gradient(135deg,#166534,#15803d)", color: suppliesDeducted ? "#4ade80" : "#fff" }}>
               {deductingSupplies ? "Deducting..." : suppliesDeducted ? "✓ Supplies deducted from inventory" : "Deduct supplies from inventory"}
             </button>
           </div>
         )}
 
-        {/* Full expense breakdown + IMC split */}
+        {/* Financials */}
         {csvData.length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>💰 Break financials & IMC split</div>
-
-            {/* Revenue */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Revenue</div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>After Whatnot fees</span><span style={{ color: "#4ade80", fontWeight: 600 }}>${revenueAfterFees.toFixed(2)}</span></div>
+              {marketValue > 0 && <div style={s.expenseRow}><span style={{ color: "#777" }}>% to market value</span><span style={{ color: percentToMarket >= 100 ? "#4ade80" : "#fb923c", fontWeight: 600 }}>{percentToMarket.toFixed(1)}% of ${marketValue.toFixed(2)}</span></div>}
             </div>
-
-            {/* Shared expenses */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Shared expenses (IMC 70% / Valley 30%)</div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Shipping supplies (incl. MagPros)</span><span style={{ color: "#f87171" }}>-${imcSupplyCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Chaser card costs</span><span style={{ color: "#f87171" }}>-${chaserCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Coupon spend</span><span style={{ color: "#f87171" }}>-${couponTotal.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Promotion total</span><span style={{ color: "#f87171" }}>-${parseFloat(promotionTotal || "0").toFixed(2)}</span></div>
-              <div style={{ ...s.expenseRow, marginTop: 4 }}>
-                <span style={{ color: "#aaa", fontWeight: 600 }}>Total shared</span>
-                <span style={{ color: "#fb923c", fontWeight: 600 }}>${sharedExpenses.toFixed(2)}</span>
-              </div>
-              <div style={s.expenseRow}>
-                <span style={{ color: "#555", fontSize: 12 }}>↳ IMC pays (70%)</span>
-                <span style={{ color: "#fb923c", fontSize: 12 }}>-${imcShareOfExpenses.toFixed(2)}</span>
-              </div>
-              <div style={{ ...s.expenseRow, borderBottom: "none" }}>
-                <span style={{ color: "#555", fontSize: 12 }}>↳ Valley pays (30%)</span>
-                <span style={{ color: "#f87171", fontSize: 12 }}>-${valleyShareOfExpenses.toFixed(2)}</span>
-              </div>
+              <div style={{ ...s.expenseRow, marginTop: 4 }}><span style={{ color: "#aaa", fontWeight: 600 }}>Total shared</span><span style={{ color: "#fb923c", fontWeight: 600 }}>${sharedExpenses.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#555", fontSize: 12 }}>↳ IMC pays (70%)</span><span style={{ color: "#fb923c", fontSize: 12 }}>-${imcShareOfExpenses.toFixed(2)}</span></div>
+              <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#555", fontSize: 12 }}>↳ Valley pays (30%)</span><span style={{ color: "#f87171", fontSize: 12 }}>-${valleyShareOfExpenses.toFixed(2)}</span></div>
             </div>
-
-            {/* Valley only expenses */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Valley only expenses</div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Valley supplies (stickers etc)</span><span style={{ color: "#f87171" }}>-${valleySupplyCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Insurance card costs</span><span style={{ color: "#f87171" }}>-${insuranceCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>First Timer card costs</span><span style={{ color: "#f87171" }}>-${firstTimerCost.toFixed(2)}</span></div>
-              <div style={{ ...s.expenseRow, borderBottom: "none" }}>
-                <span style={{ color: "#777" }}>Giveaway card costs</span>
-                <span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span>
-              </div>
+              <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#777" }}>Giveaway card costs</span><span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span></div>
             </div>
-
-            {/* Profit after all expenses */}
             <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 16, marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ color: "#aaa", fontWeight: 600, fontSize: 14 }}>Profit after all expenses</span>
                 <span style={{ color: profitAfterExpenses >= 0 ? "#4ade80" : "#f87171", fontWeight: 700, fontSize: 18 }}>${profitAfterExpenses.toFixed(2)}</span>
               </div>
             </div>
-
-            {/* 70/30 split */}
-            <div style={{ fontSize: 11, color: "#555", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>IMC split (70/30 of profit after expenses)</div>
+            <div style={{ fontSize: 11, color: "#555", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>IMC split (70/30)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ background: "#0f0f0f", border: "1px solid #fb923c33", borderRadius: 10, padding: 16 }}>
                 <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏆 BOBA take (70%)</div>
                 <div style={{ fontSize: 28, fontWeight: 800, color: "#fb923c" }}>${imcTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Profit split: ${imcTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555" }}>Expenses paid: -${imcShareOfExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Expenses paid: -${imcShareOfExpenses.toFixed(2)}</div>
                 <div style={{ fontSize: 12, color: "#fb923c", marginTop: 6, fontWeight: 600 }}>Net to BOBA: ${(imcTake - imcShareOfExpenses).toFixed(2)}</div>
               </div>
               <div style={{ background: "#0f0f0f", border: "1px solid #4ade8033", borderRadius: 10, padding: 16 }}>
                 <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏠 Valley take (30%)</div>
                 <div style={{ fontSize: 28, fontWeight: 800, color: "#4ade80" }}>${valleyTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Profit split: ${valleyTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555" }}>Shared expenses: -${valleyShareOfExpenses.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555" }}>Valley only expenses: -${valleyOnlyExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Shared: -${valleyShareOfExpenses.toFixed(2)} | Only: -${valleyOnlyExpenses.toFixed(2)}</div>
                 <div style={{ fontSize: 12, color: "#4ade80", marginTop: 6, fontWeight: 600 }}>Net to Valley: ${(valleyTake - valleyShareOfExpenses - valleyOnlyExpenses).toFixed(2)}</div>
               </div>
             </div>
