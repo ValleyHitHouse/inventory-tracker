@@ -46,6 +46,7 @@ export default function CardInventoryPage() {
   const [editQty, setEditQty] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState("");
 
   // Add card form
   const [selectedSet, setSelectedSet] = useState(0);
@@ -77,7 +78,6 @@ export default function CardInventoryPage() {
   async function deleteCard(item: any) {
     setDeletingId(item.id);
     await supabase.from("cardinventory").delete().eq("id", item.id);
-    // Update main inventory count
     const invId = subsetToInventoryId[item.subset];
     if (invId) {
       const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
@@ -94,19 +94,15 @@ export default function CardInventoryPage() {
     const newQty = parseInt(editQty) || 0;
     const oldQty = editingCard.quantity;
     const diff = newQty - oldQty;
-
     await supabase.from("cardinventory").update({
       quantity: newQty,
       price_paid: parseFloat(editPrice || "0"),
     }).eq("id", editingCard.id);
-
-    // Update main inventory count by the difference
     const invId = subsetToInventoryId[editingCard.subset];
     if (invId && diff !== 0) {
       const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
       if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity + diff) }).eq("id", invId);
     }
-
     setSaving(false);
     setEditingCard(null);
     loadInventory();
@@ -179,10 +175,19 @@ export default function CardInventoryPage() {
     td: { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
   };
 
+  // Search-filtered grouped inventory
   const groupedInventory = SUBSETS.reduce((acc, sub) => {
-    acc[sub] = inventory.filter(i => i.subset === sub && i.quantity > 0);
+    acc[sub] = inventory.filter(i => {
+      if (i.subset !== sub || i.quantity <= 0) return false;
+      if (!inventorySearch) return true;
+      const q = inventorySearch.toLowerCase().trim();
+      const combined = [i.card_number, i.hero, i.athlete, i.variation, i.weapon, i.set_name].join(" ").toLowerCase();
+      return q.split(" ").filter(Boolean).every(word => combined.includes(word));
+    });
     return acc;
   }, {} as Record<string, any[]>);
+
+  const totalCards = inventory.filter(i => i.quantity > 0).reduce((s, i) => s + i.quantity, 0);
 
   // EDIT MODAL
   if (editingCard) return (
@@ -340,12 +345,30 @@ export default function CardInventoryPage() {
           <button onClick={() => setView("add")} style={s.submitBtn}>+ Add cards manually</button>
         </div>
 
-        <div style={{ ...s.section, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Total giveaway cards</div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "#4ade80" }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
+        {/* Stats row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div style={{ ...s.section, padding: "16px 20px" }}>
+            <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Giveaway cards</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#4ade80" }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
           </div>
-          <div style={{ fontSize: 12, color: "#333" }}>Auto-updated from lot comps + manual additions</div>
+          {SUBSETS.map(sub => (
+            <div key={sub} style={{ ...s.section, padding: "16px 20px" }}>
+              <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>{sub}</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#a78bfa" }}>
+                {loading ? "—" : inventory.filter(i => i.subset === sub && i.quantity > 0).reduce((sum, i) => sum + i.quantity, 0)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div style={{ marginBottom: 20 }}>
+          <input
+            style={s.input}
+            placeholder="🔍 Search by hero, athlete, card #, treatment, weapon, set..."
+            value={inventorySearch}
+            onChange={e => setInventorySearch(e.target.value)}
+          />
         </div>
 
         {loading ? <p style={{ color: "#555" }}>Loading...</p> : SUBSETS.map(sub => (
@@ -354,11 +377,12 @@ export default function CardInventoryPage() {
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{sub}</h2>
               <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>
                 {groupedInventory[sub]?.reduce((s, i) => s + i.quantity, 0) || 0} cards
+                {inventorySearch && ` · ${groupedInventory[sub]?.length || 0} results`}
               </span>
             </div>
             {!groupedInventory[sub] || groupedInventory[sub].length === 0 ? (
               <div style={{ ...s.section, textAlign: "center", padding: 24 }}>
-                <p style={{ color: "#555", fontSize: 13 }}>No {sub} in inventory</p>
+                <p style={{ color: "#555", fontSize: 13 }}>{inventorySearch ? `No ${sub} match your search` : `No ${sub} in inventory`}</p>
               </div>
             ) : (
               <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
@@ -389,13 +413,9 @@ export default function CardInventoryPage() {
                         </td>
                         <td style={{ ...s.td, color: "#fb923c", fontWeight: 600 }}>{item.price_paid ? `$${parseFloat(item.price_paid).toFixed(2)}` : "—"}</td>
                         <td style={{ ...s.td, color: "#4ade80", fontWeight: 600 }}>{item.quantity}</td>
-                        <td style={{ ...s.td }}>
+                        <td style={s.td}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button
-                              onClick={() => { setEditingCard(item); setEditQty(String(item.quantity)); setEditPrice(String(item.price_paid || "")); }}
-                              style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
-                              Edit
-                            </button>
+                            <button onClick={() => { setEditingCard(item); setEditQty(String(item.quantity)); setEditPrice(String(item.price_paid || "")); }} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Edit</button>
                             {confirmId === item.id ? (
                               <div style={{ display: "flex", gap: 4 }}>
                                 <button onClick={() => deleteCard(item)} disabled={deletingId === item.id} style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
