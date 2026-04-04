@@ -76,8 +76,9 @@ export default function CardInventoryPage() {
   }
 
   const filteredCards = allCards.filter(c => {
-    const q = cardSearch.toLowerCase();
-    return !q || c.Hero?.toLowerCase().includes(q) || c["Athlete Inspiration"]?.toLowerCase().includes(q) || c["Card #"]?.toLowerCase().includes(q) || c.Treatment?.toLowerCase().includes(q);
+    const q = cardSearch.toLowerCase().trim();
+    const combined = [c["Card #"], c.Hero, c["Athlete Inspiration"], c.Treatment, c.Weapon, c.Power, c.Variation].join(" ").toLowerCase();
+    return !q || q.split(" ").filter(Boolean).every(word => combined.includes(word));
   }).slice(0, 50);
 
   function pickCard(card: any) {

@@ -58,13 +58,10 @@ export default function Cards() {
   const treatments = ["All", ...Array.from(new Set(cards.map(c => c.Treatment).filter(Boolean))).sort()];
   const weapons = ["All", ...Array.from(new Set(cards.map(c => c.Weapon).filter(Boolean))).sort()];
 
-  const filtered = cards.filter(c => {
-    const q = search.toLowerCase();
-    const matchSearch = !q ||
-      c["Card #"]?.toLowerCase().includes(q) ||
-      c.Hero?.toLowerCase().includes(q) ||
-      c["Athlete Inspiration"]?.toLowerCase().includes(q) ||
-      c.Variation?.toLowerCase().includes(q);
+ const filtered = cards.filter(c => {
+    const q = search.toLowerCase().trim();
+    const combined = [c["Card #"], c.Hero, c["Athlete Inspiration"], c.Variation, c.Treatment, c.Weapon, c.Power].join(" ").toLowerCase();
+    const matchSearch = !q || q.split(" ").filter(Boolean).every(word => combined.includes(word));
     const matchSet = filterSet === "All" || c.Treatment === filterSet;
     const matchWeapon = filterWeapon === "All" || c.Weapon === filterWeapon;
     return matchSearch && matchSet && matchWeapon;
