@@ -94,15 +94,12 @@ export default function Breaks() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [bobaFormBreak, setBobaFormBreak] = useState<any>(null);
-const [markingSubmitted, setMarkingSubmitted] = useState<number | null>(null);
-const [bobaFormTips, setBobaFormTips] = useState("0.00");
-  // Market prices from settings
+  const [markingSubmitted, setMarkingSubmitted] = useState<number | null>(null);
+  const [bobaFormTips, setBobaFormTips] = useState("0.00");
   const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
-
   const [cardInventory, setCardInventory] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
   const [pickedCards, setPickedCards] = useState<Record<string, {item: any, qty: number}>>({});
-
   const [supplyEstimates, setSupplyEstimates] = useState<Record<string, number>>({});
   const [editedEstimates, setEditedEstimates] = useState<Record<string, number>>({});
   const [magPros, setMagPros] = useState("");
@@ -176,13 +173,9 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
     setBobaFormBreak(null);
   }
 
-  // Box calculations
   const totalBoxes = Object.values(boxCounts).reduce((s, v) => s + v, 0);
-  const marketValue = BOX_TYPES.reduce((sum, bt) => {
-    return sum + (boxCounts[bt.key] || 0) * (marketPrices[bt.settingsKey] || 0);
-  }, 0);
+  const marketValue = BOX_TYPES.reduce((sum, bt) => sum + (boxCounts[bt.key] || 0) * (marketPrices[bt.settingsKey] || 0), 0);
 
-  // Revenue
   const revenueBeforeCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0") + parseFloat(r.coupon_price || "0"), 0);
   const couponTotal = csvData.reduce((s, r) => s + parseFloat(r.coupon_price || "0"), 0);
   const revenueAfterCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
@@ -192,7 +185,6 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
   const freeGiveaways = csvData.filter(r => parseFloat(r.original_item_price || "0") === 0).length;
   const percentToMarket = marketValue > 0 ? (revenueAfterCoupons / marketValue) * 100 : 0;
 
-  // Card costs
   const chaserCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Chasers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const insuranceCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Insurance").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const firstTimerCost = Object.values(pickedCards).filter(({ item }) => item.subset === "First Timers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
@@ -210,8 +202,7 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
   const imcShareOfExpenses = sharedExpenses * IMC_SPLIT;
   const valleyShareOfExpenses = sharedExpenses * VALLEY_SPLIT;
   const valleyOnlyExpenses = valleySupplyCost + insuranceCost + firstTimerCost + giveawayCardCost;
-  const totalExpenses = sharedExpenses + valleyOnlyExpenses;
-  const profitAfterExpenses = revenueAfterFees - totalExpenses;
+  const profitAfterExpenses = revenueAfterFees - sharedExpenses - valleyOnlyExpenses;
   const imcTake = profitAfterExpenses * IMC_SPLIT;
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
 
@@ -279,7 +270,8 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
       market_value: Math.round(marketValue * 100) / 100,
       box_value: 0,
       revenue: Math.round(revenueAfterFees * 100) / 100,
-      spots_sold: spotsSold, free_giveaways: freeGiveaways,
+      spots_sold: spotsSold,
+      free_giveaways: freeGiveaways,
       net_profit: Math.round(profitAfterExpenses * 100) / 100,
       imc_take: Math.round(imcTake * 100) / 100,
       valley_take: Math.round(valleyTake * 100) / 100,
@@ -368,14 +360,21 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
     expenseRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #161616", fontSize: 13 },
   };
 
-  // BOBA FORM MODAL
+  // BOBA FORM VIEW
   if (bobaFormBreak) {
     const b = bobaFormBreak;
-    const revenueBeforeFeesAndCoupons = parseFloat(b.revenue_before_fees || "0") ||
-      parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE);
-    const whatnotFeesForBreak = revenueBeforeFeesAndCoupons * WHATNOT_FEE;
+    const revBeforeAll = parseFloat(b.revenue_before_fees || "0") > 0
+      ? parseFloat(b.revenue_before_fees)
+      : parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE);
+    const whatnotFeesForBreak = (parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE)) * WHATNOT_FEE;
     const totalSupplyCost = parseFloat(b.total_supply_cost || "0");
-    const streamExpensesText = `Coupon Total: $${parseFloat(b.coupon_total || "0").toFixed(2)}\nPromotion Total: $${parseFloat(b.promotion_total || "0").toFixed(2)}\nTips Received: $${parseFloat(bobaFormTips || "0").toFixed(2)}\nShipping Spend: $${totalSupplyCost.toFixed(2)}\nChasers: $${parseFloat(b.chaser_cost || "0").toFixed(2)}\nOther: `;
+    const streamExpensesText =
+      `Coupon Total: $${parseFloat(b.coupon_total || "0").toFixed(2)}\n` +
+      `Promotion Total: $${parseFloat(b.promotion_total || "0").toFixed(2)}\n` +
+      `Tips Received: $${parseFloat(bobaFormTips || "0").toFixed(2)}\n` +
+      `Shipping Spend: $${totalSupplyCost.toFixed(2)}\n` +
+      `Chasers: $${parseFloat(b.chaser_cost || "0").toFixed(2)}\n` +
+      `Other: `;
 
     const fields = [
       { label: "Break name", value: "ValleyHitHouse" },
@@ -385,7 +384,7 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
       { label: "How many D-Mega boxes", value: String(b.double_mega_count || 0) },
       { label: "Wonders product", value: "None" },
       { label: "Other product", value: b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "None" },
-      { label: "Total revenue generated", value: revenueBeforeFeesAndCoupons.toFixed(2) },
+      { label: "Total revenue generated (before fees & coupons)", value: revBeforeAll.toFixed(2) },
       { label: "Total Whatnot fees", value: whatnotFeesForBreak.toFixed(2) },
       { label: "Stream expenses", value: streamExpensesText },
       { label: "Sign off name", value: "Mitch Woodhurst" },
@@ -407,37 +406,24 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
             </div>
           </div>
 
-          {/* Tips input */}
           <div style={{ ...s.section, borderColor: "#fb923c44" }}>
-            <div style={s.sectionTitle}>💰 Enter tips received (if any)</div>
+            <div style={s.sectionTitle}>💰 Tips received (if any)</div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ color: "#555", fontSize: 13 }}>$</span>
-              <input
-                style={{ ...s.input, maxWidth: 200 }}
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="0.00"
-                value={bobaFormTips}
-                onChange={e => setBobaFormTips(e.target.value)}
-              />
-              <span style={{ fontSize: 12, color: "#555" }}>This will be included in stream expenses</span>
+              <input style={{ ...s.input, maxWidth: 200 }} type="number" min={0} step="0.01" placeholder="0.00" value={bobaFormTips} onChange={e => setBobaFormTips(e.target.value)} />
+              <span style={{ fontSize: 12, color: "#555" }}>Included in stream expenses</span>
             </div>
           </div>
 
           <div style={s.section}>
-            <div style={s.sectionTitle}>Form fields — click Copy to copy each field</div>
+            <div style={s.sectionTitle}>Form fields — click Copy on each field</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {fields.map((field, i) => (
                 <div key={i} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: 14 }}>
                   <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>{field.label}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                     <div style={{ fontSize: 14, color: "#e5e5e5", fontWeight: 500, whiteSpace: "pre-wrap", flex: 1 }}>{field.value}</div>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(field.value)}
-                      style={{ fontSize: 11, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                      Copy
-                    </button>
+                    <button onClick={() => navigator.clipboard.writeText(field.value)} style={{ fontSize: 11, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>Copy</button>
                   </div>
                 </div>
               ))}
@@ -448,10 +434,7 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
             <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
               Open BOBA Form ↗
             </a>
-            <button
-              onClick={() => markBobaSubmitted(b.id)}
-              disabled={markingSubmitted === b.id}
-              style={{ ...s.submitBtn, flex: 1, background: "linear-gradient(135deg,#166534,#15803d)" }}>
+            <button onClick={() => markBobaSubmitted(b.id)} disabled={markingSubmitted === b.id} style={{ ...s.submitBtn, flex: 1, background: "linear-gradient(135deg,#166534,#15803d)" }}>
               {markingSubmitted === b.id ? "Saving..." : "✓ Mark as submitted to BOBA"}
             </button>
           </div>
@@ -459,6 +442,8 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
       </div>
     );
   }
+
+  // LIST VIEW
   if (view === "list") return (
     <div style={s.shell}>
       <div style={s.content}>
@@ -477,7 +462,9 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead><tr style={{ background: "#0f0f0f" }}>
-                {["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take","BOBA Form",""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>)}
+                {["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take","BOBA Form",""].map(h => (
+                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
+                ))}
               </tr></thead>
               <tbody>
                 {breaks.map(b => (
@@ -486,8 +473,8 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
                     <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.box_name || "—"}</td>
                     <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.num_boxes || 0}</td>
                     <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.spots_sold}</td>
-                    <td style={{ padding: "10px 14px", color: "#4ade80" }}>${b.revenue?.toFixed(2)}</td>
-                    <td style={{ padding: "10px 14px", color: b.net_profit >= 0 ? "#a78bfa" : "#f87171", fontWeight: 600 }}>${b.net_profit?.toFixed(2)}</td>
+                    <td style={{ padding: "10px 14px", color: "#4ade80" }}>${parseFloat(b.revenue || "0").toFixed(2)}</td>
+                    <td style={{ padding: "10px 14px", color: parseFloat(b.net_profit || "0") >= 0 ? "#a78bfa" : "#f87171", fontWeight: 600 }}>${parseFloat(b.net_profit || "0").toFixed(2)}</td>
                     <td style={{ padding: "10px 14px", color: "#fb923c" }}>{b.imc_take ? `$${parseFloat(b.imc_take).toFixed(2)}` : "—"}</td>
                     <td style={{ padding: "10px 14px", color: "#4ade80" }}>{b.valley_take ? `$${parseFloat(b.valley_take).toFixed(2)}` : "—"}</td>
                     <td style={{ padding: "10px 14px" }}>
@@ -521,12 +508,12 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
     </div>
   );
 
+  // NEW BREAK FORM
   return (
     <div style={s.shell}>
       <div style={s.content}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, paddingTop: 24 }}>Log new break</h1>
 
-        {/* Break details */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Break details</div>
           <div style={s.row}>
@@ -536,41 +523,23 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
           <div><label style={s.label}>Promotion total ($)</label><input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} /></div>
         </div>
 
-        {/* Box types */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Box breakdown</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
             {BOX_TYPES.map(bt => (
               <div key={bt.key}>
                 <label style={s.label}>{bt.label}</label>
-                <input
-                  style={s.input}
-                  type="number"
-                  min={0}
-                  value={boxCounts[bt.key] || 0}
-                  onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))}
-                />
-                {marketPrices[bt.settingsKey] > 0 && (
-                  <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>
-                    Market: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}
-                  </div>
-                )}
+                <input style={s.input} type="number" min={0} value={boxCounts[bt.key] || 0} onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))} />
+                {marketPrices[bt.settingsKey] > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Market: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}</div>}
               </div>
             ))}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={s.stat}>
-              <div style={s.statLabel}>Total boxes</div>
-              <div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div>
-            </div>
-            <div style={s.stat}>
-              <div style={s.statLabel}>Total market value</div>
-              <div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div>
-            </div>
+            <div style={s.stat}><div style={s.statLabel}>Total boxes</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div></div>
+            <div style={s.stat}><div style={s.statLabel}>Total market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
           </div>
         </div>
 
-        {/* Card inventory picker */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Cards used in this break</div>
           <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Search your card inventory — selected cards will be deducted when break is saved</p>
@@ -622,7 +591,6 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
           )}
         </div>
 
-        {/* CSV Upload */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Upload Whatnot CSV</div>
           <label style={{ display: "block", border: "1px dashed #333", borderRadius: 8, padding: 28, textAlign: "center", cursor: "pointer", background: "#0f0f0f" }}>
@@ -649,7 +617,6 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
           )}
         </div>
 
-        {/* Supply estimates */}
         {csvData.length > 0 && Object.keys(supplyEstimates).length > 0 && (
           <div style={s.section}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -708,7 +675,6 @@ const [bobaFormTips, setBobaFormTips] = useState("0.00");
           </div>
         )}
 
-        {/* Financials */}
         {csvData.length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>💰 Break financials & IMC split</div>
