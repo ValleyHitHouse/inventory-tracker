@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 function NavLink({ href, emoji, label, soon }: { href: string; emoji: string; label: string; soon?: boolean }) {
   const pathname = usePathname();
   const isActive = pathname === href;
-
   return (
     <Link href={href} style={{
       display: "flex", alignItems: "center", gap: 10,
@@ -38,9 +37,10 @@ export default function Sidebar() {
         <NavLink href="/cards" emoji="🃏" label="Card Database" />
         <NavLink href="/card-inventory" emoji="📋" label="Card Inventory" />
         <NavLink href="/lot-comp" emoji="🏷️" label="Lot Comps" />
+        <NavLink href="/analytics" emoji="📊" label="Analytics" />
+        <NavLink href="/settings" emoji="⚙️" label="Settings" />
         <NavLink href="/orders" emoji="📋" label="Orders" soon />
         <NavLink href="/sales" emoji="📈" label="Sales" soon />
-        <NavLink href="/analytics" emoji="📊" label="Analytics" soon />
       </nav>
       <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: 11, color: "#333" }}>
         VHH © 2026
