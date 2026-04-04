@@ -1,116 +1,93 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
-const LOW = 20;
+export default function Home() {
+  const [invCount, setInvCount] = useState<number | null>(null);
+  const [breakCount, setBreakCount] = useState<number | null>(null);
+  const [lastProfit, setLastProfit] = useState<number | null>(null);
+  const [lowStock, setLowStock] = useState<number | null>(null);
+  const [lotCount, setLotCount] = useState<number | null>(null);
+  const [customerCount, setCustomerCount] = useState<number | null>(null);
 
-function statusInfo(qty: number) {
-  if (qty === 0) return { label: "Out of stock", color: "#c62828", bg: "#fdecea" };
-  if (qty <= LOW) return { label: "Low stock", color: "#f57f17", bg: "#fff8e1" };
-  return { label: "In stock", color: "#2e7d32", bg: "#e6f4ea" };
-}
+  useEffect(() => {
+    supabase.from("Inventory").select("*").then(({ data }) => {
+      if (data) {
+        setInvCount(data.length);
+        setLowStock(data.filter(i => i.quantity <= 20).length);
+      }
+    });
+    supabase.from("Breaks").select("*").order("date", { ascending: false }).then(({ data }) => {
+      if (data) {
+        setBreakCount(data.length);
+        if (data[0]) setLastProfit(data[0].net_profit);
+      }
+    });
+    supabase.from("lotcomps").select("*").then(({ data }) => {
+      if (data) setLotCount(data.length);
+    });
+    supabase.from("BreakOrders").select("buyer_username").then(({ data }) => {
+      if (data) {
+        const unique = new Set(data.map(r => r.buyer_username).filter(Boolean));
+        setCustomerCount(unique.size);
+      }
+    });
+  }, []);
 
-const btnStyle = { width: 24, height: 24, border: "1px solid #ddd", background: "#f5f5f5", borderRadius: 4, cursor: "pointer", fontSize: 14 };
-const inputStyle = { width: 52, textAlign: "center" as const, border: "1px solid #ddd", borderRadius: 4, padding: "2px 4px", fontSize: 13 };
-const thStyle = { padding: "10px 12px", background: "#f5f5f5", borderBottom: "2px solid #e0e0e0", fontSize: 12, textAlign: "left" as const, color: "#666" };
-
-function Row({ item, onUpdate }: { item: any; onUpdate: (id: number, qty: number) => void }) {
-  const [qty, setQty] = useState(item.quantity);
-  const s = statusInfo(qty);
-
-  function change(newQty: number) {
-    const q = Math.max(0, newQty);
-    setQty(q);
-    onUpdate(item.id, q);
-  }
-
-  const isLink = item.reorder?.startsWith("http") || item.reorder?.startsWith("amazon") || item.reorder?.startsWith("cardshellz");
-  const reorderEl = isLink
-    ? <a href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`} target="_blank" style={{ color: "#1a73e8", fontSize: 12, textDecoration: "none" }}>Order now</a>
-    : <span style={{ color: "#888", fontSize: 12, fontStyle: "italic" }}>{item.reorder}</span>;
+  const cards = [
+    { href: "/inventory", emoji: "📦", label: "Inventory", desc: "Track stock levels across cards, supplies & branding", color: "#a78bfa", stat: invCount !== null ? `${invCount} SKUs` : "—", warn: lowStock ? `${lowStock} low stock` : null },
+    { href: "/breaks", emoji: "🎴", label: "Breaks", desc: "Log Whatnot breaks, upload CSVs, track profit & IMC split", color: "#f472b6", stat: breakCount !== null ? `${breakCount} logged` : "—", warn: null },
+    { href: "/customers", emoji: "👥", label: "Customers", desc: "Buyer history pulled from Whatnot CSV data", color: "#4ade80", stat: customerCount !== null ? `${customerCount} buyers` : "—", warn: null },
+    { href: "/cards", emoji: "🃏", label: "Card Database", desc: "Griffey, Alpha & Alpha Update checklists", color: "#38bdf8", stat: "3 sets", warn: null },
+    { href: "/card-inventory", emoji: "📋", label: "Card Inventory", desc: "Track chasers, insurance & first timer cards by lot", color: "#fb923c", stat: "Lot intake", warn: null },
+    { href: "/lot-comp", emoji: "🏷️", label: "Lot Comps", desc: "Comp lots, generate seller links & receive inventory", color: "#f472b6", stat: lotCount !== null ? `${lotCount} lots` : "—", warn: null },
+  ];
 
   return (
-    <tr style={{ borderBottom: "1px solid #eee" }}>
-      <td style={{ padding: "10px 12px" }}>{item.name}</td>
-      <td style={{ padding: "10px 12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button onClick={() => change(qty - 1)} style={btnStyle}>−</button>
-          <input value={qty} onChange={e => change(Number(e.target.value))} style={inputStyle} type="number" />
-          <button onClick={() => change(qty + 1)} style={btnStyle}>+</button>
-        </div>
-      </td>
-      <td style={{ padding: "10px 12px", color: "#888" }}>{item.cost}</td>
-      <td style={{ padding: "10px 12px" }}>
-        <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, background: s.bg, color: s.color }}>{s.label}</span>
-      </td>
-      <td style={{ padding: "10px 12px" }}>{reorderEl}</td>
-    </tr>
-  );
-}
-
-function Section({ title, color, items, onUpdate }: { title: string; color: string; items: any[]; onUpdate: (id: number, qty: number) => void }) {
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600 }}>{title}</h2>
-        <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: color, color: "#333" }}>{items.length} items</span>
+    <div style={{ padding: 32, background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 800, color: "#fb923c", margin: 0 }}>ValleyHitHouse</h1>
+        <p style={{ fontSize: 14, color: "#555", marginTop: 6 }}>Welcome back. What are we working on today?</p>
       </div>
-      <div style={{ border: "1px solid #eee", borderRadius: 10, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead><tr>
-            <th style={{ ...thStyle, width: "26%" }}>Item</th>
-            <th style={{ ...thStyle, width: "20%" }}>Quantity</th>
-            <th style={{ ...thStyle, width: "14%" }}>Cost</th>
-            <th style={{ ...thStyle, width: "14%" }}>Status</th>
-            <th style={{ ...thStyle, width: "26%" }}>Reorder</th>
-          </tr></thead>
-          <tbody>{items.map(item => <Row key={item.id} item={item} onUpdate={onUpdate} />)}</tbody>
-        </table>
+
+      {/* Top stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 32 }}>
+        <StatBox label="Total SKUs" value={invCount ?? "—"} color="#a78bfa" />
+        <StatBox label="Breaks logged" value={breakCount ?? "—"} color="#f472b6" />
+        <StatBox label="Last break profit" value={lastProfit !== null ? `$${parseFloat(lastProfit.toString()).toFixed(2)}` : "—"} color={lastProfit !== null && lastProfit >= 0 ? "#4ade80" : "#f87171"} />
+        <StatBox label="Total customers" value={customerCount ?? "—"} color="#38bdf8" />
+      </div>
+
+      {/* Nav cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        {cards.map(c => (
+          <Link key={c.href} href={c.href} style={{ textDecoration: "none" }}>
+            <div
+              style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: 20, cursor: "pointer", transition: "border-color 0.15s" }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = c.color)}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = "#1e1e1e")}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <span style={{ fontSize: 24 }}>{c.emoji}</span>
+                <span style={{ fontSize: 12, color: c.color, fontWeight: 600 }}>{c.stat}</span>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#e5e5e5", marginBottom: 6 }}>{c.label}</div>
+              <div style={{ fontSize: 12, color: "#555", lineHeight: 1.5 }}>{c.desc}</div>
+              {c.warn && <div style={{ marginTop: 10, fontSize: 11, color: "#fb923c", background: "#1a1000", padding: "4px 8px", borderRadius: 6, display: "inline-block" }}>⚠ {c.warn}</div>}
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );
 }
 
-export default function Home() {
-  const [items, setItems] = useState<any[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    supabase.from("Inventory").select("*").order("id").then(({ data }) => {
-      if (data) setItems(data);
-    });
-  }, []);
-
-  async function handleUpdate(id: number, qty: number) {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i));
-    setSaving(true);
-    setSaved(false);
-    await supabase.from("Inventory").update({ quantity: qty }).eq("id", id);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  const cards = items.filter(i => i.category === "Cards");
-  const supplies = items.filter(i => i.category === "Supplies");
-  const branding = items.filter(i => i.category === "Branding");
-
+function StatBox({ label, value, color }: { label: string; value: any; color: string }) {
   return (
-    <main style={{ fontFamily: "sans-serif", maxWidth: 960, margin: "40px auto", padding: "0 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>ValleyHitHouse inventory</h1>
-          <p style={{ color: "#888", fontSize: 13 }}>Changes save automatically</p>
-        </div>
-        {saving && <span style={{ fontSize: 13, color: "#888" }}>Saving...</span>}
-        {saved && <span style={{ fontSize: 13, color: "#2e7d32" }}>Saved!</span>}
-      </div>
-      {items.length === 0 ? <p style={{ color: "#888" }}>Loading...</p> : <>
-        <Section title="Card inventory" color="#e3f2fd" items={cards} onUpdate={handleUpdate} />
-        <Section title="Supplies inventory" color="#e8f5e9" items={supplies} onUpdate={handleUpdate} />
-        <Section title="Branding inventory" color="#f3e5f5" items={branding} onUpdate={handleUpdate} />
-      </>}
-    </main>
+    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px 20px" }}>
+      <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
+    </div>
   );
 }
