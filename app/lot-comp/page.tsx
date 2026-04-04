@@ -156,10 +156,10 @@ function SellerView({ id }: { id: string }) {
 // MAIN DASHBOARD PAGE
 export default function LotCompPage() {
   const pathname = usePathname();
+  const segments = pathname?.split("/").filter(Boolean) || [];
+  const isSellerPage = segments.length === 2 && segments[0] === "lot-comp" && segments[1] !== "";
   
-  // Check if we're on a seller page like /lot-comp/4
-  const segments = pathname?.split("/").filter(Boolean);
-  if (segments && segments.length === 2 && segments[0] === "lot-comp") {
+  if (isSellerPage) {
     return <SellerView id={segments[1]} />;
   }
 
