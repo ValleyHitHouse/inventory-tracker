@@ -76,8 +76,11 @@ function SellerView({ id }: { id: string }) {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", fontFamily: "sans-serif" }}>
-      <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e", padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#fb923c" }}>ValleyHitHouse</div>
+      <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src="/LOGO-BG.png" alt="ValleyHitHouse" style={{ width: 52, height: "auto" }} />
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#fb923c" }}>ValleyHitHouse</div>
+        </div>
         <div style={{ fontSize: 12, color: "#555" }}>Lot offer</div>
       </div>
       <div style={{ maxWidth: 800, margin: "0 auto", padding: 32 }}>
