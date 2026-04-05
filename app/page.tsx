@@ -61,7 +61,6 @@ export default function Home() {
   const percentToMarket = marketValue > 0 ? (lastBreakRevenue / marketValue) * 100 : 0;
 
   const s = {
-    shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", padding: 32 },
     section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
     statCard: { background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px 20px" },
@@ -70,63 +69,76 @@ export default function Home() {
   };
 
   if (loading) return (
-    <div style={{ ...s.shell, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <p style={{ color: "#555" }}>Loading...</p>
     </div>
   );
 
   return (
-    <div style={s.shell}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", padding: "24px 16px" }}>
+      <style>{`
+        .home-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+        .home-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .home-last-break-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+        .lot-status-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+        @media (max-width: 768px) {
+          .home-grid-4 { grid-template-columns: repeat(2, 1fr); }
+          .home-grid-2 { grid-template-columns: 1fr; }
+          .home-last-break-grid { grid-template-columns: repeat(2, 1fr); }
+          .lot-status-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+      `}</style>
+
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: "#fb923c", margin: 0 }}>ValleyHitHouse</h1>
-        <p style={{ fontSize: 14, color: "#555", marginTop: 6 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#fb923c", margin: 0 }}>ValleyHitHouse</h1>
+        <p style={{ fontSize: 13, color: "#555", marginTop: 4 }}>
           {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
         </p>
       </div>
 
       {/* Alerts row */}
       {(outOfStockItems.length > 0 || lowStockItems.length > 0 || unsubmittedBreaks.length > 0 || pendingLots.length > 0) && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           {outOfStockItems.length > 0 && (
-            <Link href="/inventory" style={{ textDecoration: "none", flex: 1, minWidth: 200 }}>
-              <div style={{ background: "#1a0000", border: "1px solid #f8717144", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            <Link href="/inventory" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+              <div style={{ background: "#1a0000", border: "1px solid #f8717144", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>🚨</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#f87171" }}>{outOfStockItems.length} item{outOfStockItems.length > 1 ? "s" : ""} out of stock</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#f87171" }}>{outOfStockItems.length} out of stock</div>
                   <div style={{ fontSize: 11, color: "#555" }}>{outOfStockItems.map(i => i.name).join(", ")}</div>
                 </div>
               </div>
             </Link>
           )}
           {lowStockItems.length > 0 && (
-            <Link href="/inventory" style={{ textDecoration: "none", flex: 1, minWidth: 200 }}>
-              <div style={{ background: "#1a0f00", border: "1px solid #fb923c44", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            <Link href="/inventory" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+              <div style={{ background: "#1a0f00", border: "1px solid #fb923c44", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>⚠️</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#fb923c" }}>{lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""} low stock</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#fb923c" }}>{lowStockItems.length} low stock</div>
                   <div style={{ fontSize: 11, color: "#555" }}>{lowStockItems.slice(0, 3).map(i => i.name).join(", ")}{lowStockItems.length > 3 ? ` +${lowStockItems.length - 3} more` : ""}</div>
                 </div>
               </div>
             </Link>
           )}
           {unsubmittedBreaks.length > 0 && (
-            <Link href="/breaks" style={{ textDecoration: "none", flex: 1, minWidth: 200 }}>
-              <div style={{ background: "#0d0d1a", border: "1px solid #a78bfa44", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            <Link href="/breaks" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+              <div style={{ background: "#0d0d1a", border: "1px solid #a78bfa44", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>📋</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#a78bfa" }}>{unsubmittedBreaks.length} break{unsubmittedBreaks.length > 1 ? "s" : ""} not submitted to BOBA</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#a78bfa" }}>{unsubmittedBreaks.length} not submitted to BOBA</div>
                   <div style={{ fontSize: 11, color: "#555" }}>Click to submit</div>
                 </div>
               </div>
             </Link>
           )}
           {pendingLots.length > 0 && (
-            <Link href="/lot-comp" style={{ textDecoration: "none", flex: 1, minWidth: 200 }}>
-              <div style={{ background: "#0d1a0d", border: "1px solid #4ade8044", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            <Link href="/lot-comp" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+              <div style={{ background: "#0d1a0d", border: "1px solid #4ade8044", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>🏷️</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#4ade80" }}>{pendingLots.length} lot{pendingLots.length > 1 ? "s" : ""} awaiting seller response</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#4ade80" }}>{pendingLots.length} awaiting seller response</div>
                   <div style={{ fontSize: 11, color: "#555" }}>Click to view</div>
                 </div>
               </div>
@@ -135,8 +147,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* All time stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+      {/* All time stats — 4 col desktop, 2 col mobile */}
+      <div className="home-grid-4">
         <div style={s.statCard}>
           <div style={s.label}>Total revenue</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "#4ade80" }}>${totalRevenue.toFixed(2)}</div>
@@ -159,7 +171,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+      <div className="home-grid-4">
         <div style={s.statCard}>
           <div style={s.label}>Breaks logged</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "#e5e5e5" }}>{breaks.length}</div>
@@ -184,7 +196,7 @@ export default function Home() {
       {lastBreak && (
         <div style={s.section}>
           <div style={s.sectionTitle}>🎴 Last break</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+          <div className="home-last-break-grid">
             <div>
               <div style={s.label}>Date</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "#aaa" }}>{lastBreak.date}</div>
@@ -211,32 +223,24 @@ export default function Home() {
             </div>
           </div>
           {(lastBreak.jumbo_hobby_count > 0 || lastBreak.hobby_count > 0 || lastBreak.double_mega_count > 0 || lastBreak.blaster_count > 0) && (
-            <div style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
               {lastBreak.jumbo_hobby_count > 0 && <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "#fb923c22", color: "#fb923c" }}>Jumbo Hobby ×{lastBreak.jumbo_hobby_count}</span>}
               {lastBreak.hobby_count > 0 && <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>Hobby ×{lastBreak.hobby_count}</span>}
               {lastBreak.double_mega_count > 0 && <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "#38bdf822", color: "#38bdf8" }}>Double Mega ×{lastBreak.double_mega_count}</span>}
               {lastBreak.blaster_count > 0 && <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "#4ade8022", color: "#4ade80" }}>Blaster ×{lastBreak.blaster_count}</span>}
             </div>
           )}
-          <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
-            <div style={{ fontSize: 12, color: "#555" }}>
-              Spots sold: <span style={{ color: "#aaa" }}>{lastBreak.spots_sold}</span>
-            </div>
-            <div style={{ fontSize: 12, color: "#555" }}>
-              BOBA: <span style={{ color: "#fb923c" }}>${parseFloat(lastBreak.imc_take || "0").toFixed(2)}</span>
-            </div>
-            <div style={{ fontSize: 12, color: "#555" }}>
-              Valley: <span style={{ color: "#4ade80" }}>${parseFloat(lastBreak.valley_take || "0").toFixed(2)}</span>
-            </div>
-            <div style={{ fontSize: 12, color: "#555" }}>
-              BOBA submitted: <span style={{ color: lastBreak.boba_submitted ? "#4ade80" : "#f87171" }}>{lastBreak.boba_submitted ? "✓ Yes" : "✗ No"}</span>
-            </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12, color: "#555" }}>Spots sold: <span style={{ color: "#aaa" }}>{lastBreak.spots_sold}</span></div>
+            <div style={{ fontSize: 12, color: "#555" }}>BOBA: <span style={{ color: "#fb923c" }}>${parseFloat(lastBreak.imc_take || "0").toFixed(2)}</span></div>
+            <div style={{ fontSize: 12, color: "#555" }}>Valley: <span style={{ color: "#4ade80" }}>${parseFloat(lastBreak.valley_take || "0").toFixed(2)}</span></div>
+            <div style={{ fontSize: 12, color: "#555" }}>BOBA submitted: <span style={{ color: lastBreak.boba_submitted ? "#4ade80" : "#f87171" }}>{lastBreak.boba_submitted ? "✓ Yes" : "✗ No"}</span></div>
           </div>
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Lot comps status */}
+      {/* Lot comps + Stock alerts — 2 col desktop, 1 col mobile */}
+      <div className="home-grid-2">
         <div style={s.section}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={s.sectionTitle}>🏷️ Lot comps</div>
@@ -246,7 +250,7 @@ export default function Home() {
             <p style={{ color: "#555", fontSize: 13 }}>No lots yet</p>
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+              <div className="lot-status-grid">
                 {[
                   { label: "Pending", count: pendingLots.length, color: "#fb923c" },
                   { label: "Accepted", count: acceptedLots.length, color: "#a78bfa" },
@@ -264,7 +268,10 @@ export default function Home() {
                   <span style={{ color: "#aaa" }}>{lot.lot_name}</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: "#4ade80" }}>${parseFloat(lot.total_offer || "0").toFixed(2)}</span>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: lot.status === "pending" ? "#fb923c22" : lot.status === "in_transit" ? "#38bdf822" : lot.status === "arrived" ? "#4ade8022" : "#a78bfa22", color: lot.status === "pending" ? "#fb923c" : lot.status === "in_transit" ? "#38bdf8" : lot.status === "arrived" ? "#4ade80" : "#a78bfa" }}>
+                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20,
+                      background: lot.status === "pending" ? "#fb923c22" : lot.status === "in_transit" ? "#38bdf822" : lot.status === "arrived" ? "#4ade8022" : "#a78bfa22",
+                      color: lot.status === "pending" ? "#fb923c" : lot.status === "in_transit" ? "#38bdf8" : lot.status === "arrived" ? "#4ade80" : "#a78bfa"
+                    }}>
                       {lot.status.replace("_", " ")}
                     </span>
                   </div>
@@ -274,7 +281,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Low stock */}
         <div style={s.section}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={s.sectionTitle}>📦 Stock alerts</div>
@@ -313,7 +319,7 @@ export default function Home() {
           { href: "/analytics", label: "→ Analytics", color: "#38bdf8" },
           { href: "/settings", label: "→ Settings", color: "#4ade80" },
         ].map(({ href, label, color }) => (
-          <Link key={href} href={href} style={{ fontSize: 13, color, textDecoration: "none", background: color + "11", border: `1px solid ${color}33`, borderRadius: 8, padding: "8px 16px", fontWeight: 600 }}>
+          <Link key={href} href={href} style={{ fontSize: 13, color, textDecoration: "none", background: color + "11", border: `1px solid ${color}33`, borderRadius: 8, padding: "8px 14px", fontWeight: 600 }}>
             {label}
           </Link>
         ))}
