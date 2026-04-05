@@ -26,6 +26,7 @@ function InventoryCard({ item, onUpdate, onEdit }: {
 
   const st = statusInfo(localQty);
   const isLink = item.reorder?.startsWith("http") || item.reorder?.startsWith("amazon") || item.reorder?.startsWith("cardshellz");
+  const reorderHref = item.reorder?.startsWith("http") ? item.reorder : `https://${item.reorder}`;
 
   return (
     <div style={{
@@ -45,11 +46,7 @@ function InventoryCard({ item, onUpdate, onEdit }: {
             <span style={{ fontSize: 11, color: "#555" }}>{item.cost}</span>
           )}
           {isLink && (
-            
-              href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`}
-              target="_blank"
-              style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none" }}
-            >
+            <a href={reorderHref} target="_blank" style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none" }}>
               Reorder ↗
             </a>
           )}
@@ -102,12 +99,7 @@ function SectionList({ title, color, items, onUpdate, onEdit, search }: {
         </span>
       </div>
       <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
-        {/* Column headers — hidden on mobile */}
-        <div className="inv-header" style={{
-          display: "grid", gridTemplateColumns: "1fr auto",
-          padding: "8px 16px", borderBottom: "1px solid #1e1e1e",
-          background: "#0f0f0f",
-        } as React.CSSProperties}>
+        <div className="inv-header" style={{ display: "grid", gridTemplateColumns: "1fr auto", padding: "8px 16px", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f" }}>
           <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px" }}>Item</span>
           <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px" }}>Qty / Actions</span>
         </div>
