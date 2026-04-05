@@ -96,6 +96,7 @@ export default function Sidebar() {
           width: 220, background: "#111", borderRight: "1px solid #1e1e1e",
           display: "flex", flexDirection: "column",
           position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 150,
+          willChange: "transform",
         }}
       >
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", flexDirection: "column", alignItems: "center" }}>
