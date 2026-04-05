@@ -10,9 +10,12 @@ function statusInfo(qty: number) {
   return { label: "In stock", color: "#4ade80", bg: "#4ade8022" };
 }
 
-function InventoryRow({ item, onUpdate, onEdit }: { item: any; onUpdate: (id: number, qty: number) => void; onEdit: (item: any) => void }) {
+function InventoryCard({ item, onUpdate, onEdit }: {
+  item: any;
+  onUpdate: (id: number, qty: number) => void;
+  onEdit: (item: any) => void;
+}) {
   const [localQty, setLocalQty] = useState(item.quantity);
-
   useEffect(() => { setLocalQty(item.quantity); }, [item.quantity]);
 
   function change(newQty: number) {
@@ -23,64 +26,66 @@ function InventoryRow({ item, onUpdate, onEdit }: { item: any; onUpdate: (id: nu
 
   const st = statusInfo(localQty);
   const isLink = item.reorder?.startsWith("http") || item.reorder?.startsWith("amazon") || item.reorder?.startsWith("cardshellz");
-  const reorderEl = isLink
-    ? <a href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`} target="_blank" style={{ color: "#38bdf8", fontSize: 12, textDecoration: "none" }}>Order now ↗</a>
-    : <span style={{ color: "#555", fontSize: 12 }}>{item.reorder || "—"}</span>;
-
-  const qtyBtn: React.CSSProperties = { width: 32, height: 32, border: "1px solid #333", background: "#1a1a1a", borderRadius: 4, cursor: "pointer", fontSize: 16, color: "#aaa", flexShrink: 0 };
-  const qtyInput: React.CSSProperties = { width: 48, textAlign: "center", border: "1px solid #333", borderRadius: 4, padding: "3px 4px", fontSize: 13, background: "#0f0f0f", color: "#e5e5e5", outline: "none", minWidth: 0 };
-  const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" };
-
-  const qtyControls = (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <button onClick={() => change(localQty - 1)} style={qtyBtn}>−</button>
-      <input value={localQty} onChange={e => change(Number(e.target.value))} style={qtyInput} type="number" min={0} />
-      <button onClick={() => change(localQty + 1)} style={qtyBtn}>+</button>
-    </div>
-  );
 
   return (
-    <>
-      {/* Desktop row */}
-      <tr className="inv-desktop-row">
-        <td style={{ ...td, color: "#e5e5e5", fontWeight: 500 }}>{item.name}</td>
-        <td style={td}>{qtyControls}</td>
-        <td style={{ ...td, color: "#aaa" }}>{item.cost || "—"}</td>
-        <td style={td}>
-          <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, background: st.bg, color: st.color }}>{st.label}</span>
-        </td>
-        <td style={td}>{reorderEl}</td>
-        <td style={td}>
-          <button onClick={() => onEdit(item)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
-        </td>
-      </tr>
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "12px 16px", borderBottom: "1px solid #161616", gap: 12,
+    }}>
+      {/* Left: name + meta */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5", marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {item.name}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: st.bg, color: st.color }}>
+            {st.label}
+          </span>
+          {item.cost && (
+            <span style={{ fontSize: 11, color: "#555" }}>{item.cost}</span>
+          )}
+          {isLink && (
+            
+              href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`}
+              target="_blank"
+              style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none" }}
+            >
+              Reorder ↗
+            </a>
+          )}
+          {item.reorder && !isLink && (
+            <span style={{ fontSize: 11, color: "#555" }}>{item.reorder}</span>
+          )}
+        </div>
+      </div>
 
-      {/* Mobile card row */}
-      <tr className="inv-mobile-row">
-        <td colSpan={6} style={{ padding: "10px 12px", borderBottom: "1px solid #161616" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5", marginBottom: 6 }}>{item.name}</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: st.bg, color: st.color }}>{st.label}</span>
-                {item.cost && <span style={{ fontSize: 11, color: "#555" }}>{item.cost}</span>}
-                {isLink && (
-                  <a href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`} target="_blank" style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none" }}>Reorder ↗</a>
-                )}
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-              {qtyControls}
-              <button onClick={() => onEdit(item)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
-            </div>
-          </div>
-        </td>
-      </tr>
-    </>
+      {/* Right: qty controls + edit */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <button
+          onClick={() => change(localQty - 1)}
+          style={{ width: 30, height: 30, border: "1px solid #333", background: "#1a1a1a", borderRadius: 6, cursor: "pointer", fontSize: 16, color: "#aaa", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >−</button>
+        <input
+          value={localQty}
+          onChange={e => change(Number(e.target.value))}
+          type="number"
+          min={0}
+          style={{ width: 44, textAlign: "center", border: "1px solid #333", borderRadius: 6, padding: "4px 2px", fontSize: 13, background: "#0f0f0f", color: "#e5e5e5", outline: "none" }}
+        />
+        <button
+          onClick={() => change(localQty + 1)}
+          style={{ width: 30, height: 30, border: "1px solid #333", background: "#1a1a1a", borderRadius: 6, cursor: "pointer", fontSize: 16, color: "#aaa", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >+</button>
+        <button
+          onClick={() => onEdit(item)}
+          style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}
+        >Edit</button>
+      </div>
+    </div>
   );
 }
 
-function SectionTable({ title, color, items, onUpdate, onEdit, search }: {
+function SectionList({ title, color, items, onUpdate, onEdit, search }: {
   title: string; color: string; items: any[];
   onUpdate: (id: number, qty: number) => void;
   onEdit: (item: any) => void;
@@ -88,30 +93,31 @@ function SectionTable({ title, color, items, onUpdate, onEdit, search }: {
 }) {
   const filtered = items.filter(i => !search || i.name?.toLowerCase().includes(search.toLowerCase()));
 
-  const th: React.CSSProperties = { padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f" };
-
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#e5e5e5" }}>{title}</h2>
-        <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 20, background: color + "22", color }}>{filtered.length} items</span>
+        <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 20, background: color + "22", color }}>
+          {filtered.length} items
+        </span>
       </div>
-      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden", maxWidth: "100%" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed" }}>
-          <thead className="inv-desktop-row"><tr>
-            <th style={th}>Item</th>
-            <th style={th}>Quantity</th>
-            <th style={th}>Cost</th>
-            <th style={th}>Status</th>
-            <th style={th}>Reorder</th>
-            <th style={th}></th>
-          </tr></thead>
-          <tbody>
-            {filtered.map(item => (
-              <InventoryRow key={item.id} item={item} onUpdate={onUpdate} onEdit={onEdit} />
-            ))}
-          </tbody>
-        </table>
+      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
+        {/* Column headers — hidden on mobile */}
+        <div className="inv-header" style={{
+          display: "grid", gridTemplateColumns: "1fr auto",
+          padding: "8px 16px", borderBottom: "1px solid #1e1e1e",
+          background: "#0f0f0f",
+        }}>
+          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Item</span>
+          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Qty / Actions</span>
+        </div>
+        {filtered.length === 0 ? (
+          <div style={{ padding: "16px", fontSize: 13, color: "#555" }}>No items match</div>
+        ) : (
+          filtered.map(item => (
+            <InventoryCard key={item.id} item={item} onUpdate={onUpdate} onEdit={onEdit} />
+          ))
+        )}
       </div>
     </div>
   );
@@ -166,29 +172,18 @@ export default function InventoryPage() {
     width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6,
     padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box",
   };
-  const submitBtn: React.CSSProperties = {
-    background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8,
-    padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", width: "100%",
-  };
-
-  const styles = `
-    .inv-mobile-row { display: none; }
-    @media (max-width: 768px) {
-      .inv-desktop-row { display: none !important; }
-      .inv-mobile-row { display: table-row; }
-    }
-  `;
 
   if (editingItem) return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", overflowX: "hidden" }}>
-      <style>{styles}</style>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Edit item</h1>
             <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>{editingItem.category}</p>
           </div>
-          <button onClick={() => setEditingItem(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Cancel</button>
+          <button onClick={() => setEditingItem(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>
+            ← Cancel
+          </button>
         </div>
         <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -209,7 +204,11 @@ export default function InventoryPage() {
             </div>
           </div>
         </div>
-        <button style={submitBtn} onClick={saveEdit} disabled={savingEdit}>
+        <button
+          style={{ background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", width: "100%" }}
+          onClick={saveEdit}
+          disabled={savingEdit}
+        >
           {savingEdit ? "Saving..." : "Save changes"}
         </button>
       </div>
@@ -217,8 +216,10 @@ export default function InventoryPage() {
   );
 
   return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", overflowX: "hidden" }}>
-      <style>{styles}</style>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
+      <style>{`
+        @media (max-width: 768px) { .inv-header { display: none !important; } }
+      `}</style>
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
           <div>
@@ -236,9 +237,9 @@ export default function InventoryPage() {
         </div>
 
         {items.length === 0 ? <p style={{ color: "#555" }}>Loading...</p> : <>
-          <SectionTable title="Card inventory" color="#a78bfa" items={cards} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
-          <SectionTable title="Supplies inventory" color="#4ade80" items={supplies} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
-          <SectionTable title="Branding inventory" color="#fb923c" items={branding} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
+          <SectionList title="Card inventory" color="#a78bfa" items={cards} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
+          <SectionList title="Supplies inventory" color="#4ade80" items={supplies} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
+          <SectionList title="Branding inventory" color="#fb923c" items={branding} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
         </>}
       </div>
     </div>
