@@ -27,8 +27,8 @@ function InventoryRow({ item, onUpdate, onEdit }: { item: any; onUpdate: (id: nu
     ? <a href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`} target="_blank" style={{ color: "#38bdf8", fontSize: 12, textDecoration: "none" }}>Order now ↗</a>
     : <span style={{ color: "#555", fontSize: 12 }}>{item.reorder || "—"}</span>;
 
-  const qtyBtn: React.CSSProperties = { width: 32, height: 32, border: "1px solid #333", background: "#1a1a1a", borderRadius: 4, cursor: "pointer", fontSize: 16, color: "#aaa" };
-  const qtyInput: React.CSSProperties = { width: 56, textAlign: "center", border: "1px solid #333", borderRadius: 4, padding: "3px 4px", fontSize: 13, background: "#0f0f0f", color: "#e5e5e5", outline: "none" };
+  const qtyBtn: React.CSSProperties = { width: 32, height: 32, border: "1px solid #333", background: "#1a1a1a", borderRadius: 4, cursor: "pointer", fontSize: 16, color: "#aaa", flexShrink: 0 };
+  const qtyInput: React.CSSProperties = { width: 48, textAlign: "center", border: "1px solid #333", borderRadius: 4, padding: "3px 4px", fontSize: 13, background: "#0f0f0f", color: "#e5e5e5", outline: "none", minWidth: 0 };
   const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" };
 
   const qtyControls = (
@@ -42,7 +42,7 @@ function InventoryRow({ item, onUpdate, onEdit }: { item: any; onUpdate: (id: nu
   return (
     <>
       {/* Desktop row */}
-      <tr className="inv-desktop-row" style={{ borderBottom: "1px solid #161616" }}>
+      <tr className="inv-desktop-row">
         <td style={{ ...td, color: "#e5e5e5", fontWeight: 500 }}>{item.name}</td>
         <td style={td}>{qtyControls}</td>
         <td style={{ ...td, color: "#aaa" }}>{item.cost || "—"}</td>
@@ -55,19 +55,21 @@ function InventoryRow({ item, onUpdate, onEdit }: { item: any; onUpdate: (id: nu
         </td>
       </tr>
 
-      {/* Mobile card */}
+      {/* Mobile card row */}
       <tr className="inv-mobile-row">
-        <td colSpan={6} style={{ padding: "10px 0", borderBottom: "1px solid #161616" }}>
+        <td colSpan={6} style={{ padding: "10px 12px", borderBottom: "1px solid #161616" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5", marginBottom: 6 }}>{item.name}</div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: st.bg, color: st.color }}>{st.label}</span>
                 {item.cost && <span style={{ fontSize: 11, color: "#555" }}>{item.cost}</span>}
-                {isLink && <a href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`} target="_blank" style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none" }}>Reorder ↗</a>}
+                {isLink && (
+                  <a href={item.reorder.startsWith("http") ? item.reorder : `https://${item.reorder}`} target="_blank" style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none" }}>Reorder ↗</a>
+                )}
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
               {qtyControls}
               <button onClick={() => onEdit(item)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
             </div>
@@ -94,8 +96,8 @@ function SectionTable({ title, color, items, onUpdate, onEdit, search }: {
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#e5e5e5" }}>{title}</h2>
         <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 20, background: color + "22", color }}>{filtered.length} items</span>
       </div>
-      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden", maxWidth: "100%" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed" }}>
           <thead className="inv-desktop-row"><tr>
             <th style={th}>Item</th>
             <th style={th}>Quantity</th>
@@ -104,7 +106,7 @@ function SectionTable({ title, color, items, onUpdate, onEdit, search }: {
             <th style={th}>Reorder</th>
             <th style={th}></th>
           </tr></thead>
-          <tbody style={{ padding: "0 12px" }}>
+          <tbody>
             {filtered.map(item => (
               <InventoryRow key={item.id} item={item} onUpdate={onUpdate} onEdit={onEdit} />
             ))}
@@ -160,21 +162,25 @@ export default function InventoryPage() {
   const supplies = items.filter(i => i.category === "Supplies");
   const branding = items.filter(i => i.category === "Branding");
 
-  const inputStyle: React.CSSProperties = { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box" };
-  const submitBtn: React.CSSProperties = { background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", width: "100%" };
+  const inputStyle: React.CSSProperties = {
+    width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6,
+    padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box",
+  };
+  const submitBtn: React.CSSProperties = {
+    background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8,
+    padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", width: "100%",
+  };
 
   const styles = `
     .inv-mobile-row { display: none; }
     @media (max-width: 768px) {
       .inv-desktop-row { display: none !important; }
       .inv-mobile-row { display: table-row; }
-      .inv-mobile-row td { padding: 10px 12px !important; }
     }
   `;
 
-  // EDIT VIEW
   if (editingItem) return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", overflowX: "hidden" }}>
       <style>{styles}</style>
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
@@ -211,7 +217,7 @@ export default function InventoryPage() {
   );
 
   return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", overflowX: "hidden" }}>
       <style>{styles}</style>
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
