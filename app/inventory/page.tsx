@@ -107,9 +107,9 @@ function SectionList({ title, color, items, onUpdate, onEdit, search }: {
           display: "grid", gridTemplateColumns: "1fr auto",
           padding: "8px 16px", borderBottom: "1px solid #1e1e1e",
           background: "#0f0f0f",
-        }}>
-          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Item</span>
-          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Qty / Actions</span>
+        } as React.CSSProperties}>
+          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px" }}>Item</span>
+          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px" }}>Qty / Actions</span>
         </div>
         {filtered.length === 0 ? (
           <div style={{ padding: "16px", fontSize: 13, color: "#555" }}>No items match</div>
