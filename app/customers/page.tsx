@@ -62,62 +62,86 @@ export default function Customers() {
     (c.shipping_address || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const s = {
-    shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" },
-    content: { padding: 32, maxWidth: 1100, margin: "0 auto" },
-    input: { background: "#111", border: "1px solid #222", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#e5e5e5", outline: "none", width: "100%", maxWidth: 320 },
-    th: { padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" },
-    td: { padding: "12px 14px", fontSize: 13, borderBottom: "1px solid #161616" },
-  };
+  const rankColor = (i: number) =>
+    i === 0 ? "#fb923c" : i === 1 ? "#aaa" : i === 2 ? "#cd7f32" : "#555";
 
   return (
-    <div style={s.shell}>
-      <div style={s.content}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
+      <style>{`
+        .cust-search { width: 100%; max-width: 320px; }
+        @media (max-width: 768px) {
+          .cust-search { max-width: 100%; }
+          .cust-header { flex-direction: column; align-items: flex-start !important; gap: 12px; }
+        }
+      `}</style>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
+
+        <div className="cust-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Customers</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Customers</h1>
             <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
-              {loading ? "Loading..." : `${customers.length} unique buyers · click any row for full profile`}
+              {loading ? "Loading..." : `${customers.length} unique buyers · tap for full profile`}
             </p>
           </div>
-          <input style={s.input} placeholder="🔍 Search by username or address..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input
+            className="cust-search"
+            style={{ background: "#111", border: "1px solid #222", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#e5e5e5", outline: "none" }}
+            placeholder="🔍 Search by username or address..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
 
-        {loading ? <p style={{ color: "#555" }}>Loading customers...</p> : filtered.length === 0 ? (
+        {loading ? (
+          <p style={{ color: "#555" }}>Loading customers...</p>
+        ) : filtered.length === 0 ? (
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 48, textAlign: "center" }}>
-            <p style={{ color: "#555", fontSize: 13 }}>{customers.length === 0 ? "No breaks logged yet — customers appear automatically when you log breaks." : "No customers match your search."}</p>
+            <p style={{ color: "#555", fontSize: 13 }}>
+              {customers.length === 0 ? "No breaks logged yet — customers appear automatically when you log breaks." : "No customers match your search."}
+            </p>
           </div>
         ) : (
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#0f0f0f" }}>
-                  <th style={s.th}>#</th>
-                  <th style={s.th}>Username</th>
-                  <th style={s.th}>Shipping address</th>
-                  <th style={s.th}>Total spent</th>
-                  <th style={s.th}>Orders</th>
-                  <th style={s.th}>Breaks</th>
-                  <th style={s.th}>Last break</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c, i) => (
-                  <tr key={i} onClick={() => router.push(`/customers/${encodeURIComponent(c.username)}`)}
-                    style={{ borderBottom: "1px solid #161616", cursor: "pointer" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#1a1a1a")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    <td style={{ ...s.td, color: i === 0 ? "#fb923c" : i === 1 ? "#aaa" : i === 2 ? "#cd7f32" : "#555", fontWeight: 700 }}>#{i + 1}</td>
-                    <td style={{ ...s.td, color: "#a78bfa", fontWeight: 600 }}>{c.username}</td>
-                    <td style={{ ...s.td, color: "#777", fontSize: 12 }}>{c.shipping_address}</td>
-                    <td style={{ ...s.td, color: "#4ade80", fontWeight: 700 }}>${c.total_spent.toFixed(2)}</td>
-                    <td style={{ ...s.td, color: "#aaa" }}>{c.order_count}</td>
-                    <td style={{ ...s.td, color: "#38bdf8" }}>{c.break_count}</td>
-                    <td style={{ ...s.td, color: "#555" }}>{c.last_break_date || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {filtered.map((c, i) => (
+              <div
+                key={i}
+                onClick={() => router.push(`/customers/${encodeURIComponent(c.username)}`)}
+                style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", cursor: "pointer" }}
+              >
+                {/* Top row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: rankColor(i), minWidth: 28 }}>#{i + 1}</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>{c.username}</div>
+                      <div style={{ fontSize: 11, color: "#555", marginTop: 2, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {c.shipping_address}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#4ade80" }}>${c.total_spent.toFixed(2)}</div>
+                    <div style={{ fontSize: 11, color: "#555" }}>total spent</div>
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "7px 10px" }}>
+                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Orders</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#aaa" }}>{c.order_count}</div>
+                  </div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "7px 10px" }}>
+                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Breaks</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#38bdf8" }}>{c.break_count}</div>
+                  </div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "7px 10px" }}>
+                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Last break</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#555" }}>{c.last_break_date || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
