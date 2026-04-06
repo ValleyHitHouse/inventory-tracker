@@ -4,11 +4,11 @@ import Sidebar from "./Sidebar";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" style={{ overflowX: "hidden" }}>
+    <html lang="en">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body style={{ margin: 0, fontFamily: "sans-serif", background: "#0a0a0a", color: "#e5e5e5", overflowX: "hidden" }}>
+      <body style={{ margin: 0, fontFamily: "sans-serif", background: "#0a0a0a", color: "#e5e5e5" }}>
         <Inner>{children}</Inner>
       </body>
     </html>
@@ -26,10 +26,7 @@ function Inner({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar />
-      <div
-        className="vhh-main"
-        style={{ marginLeft: 220, flex: 1, minHeight: "100vh" }}
-      >
+      <div className="vhh-main" style={{ marginLeft: 220, minHeight: "100vh" }}>
         {children}
       </div>
       <style>{`
@@ -37,14 +34,6 @@ function Inner({ children }: { children: React.ReactNode }) {
           .vhh-main {
             margin-left: 0 !important;
             padding-top: 56px;
-            width: 100vw;
-            max-width: 100vw;
-            overflow-x: hidden;
-          }
-          html, body {
-            overflow-x: hidden;
-            width: 100%;
-            max-width: 100vw;
           }
         }
       `}</style>

@@ -3,7 +3,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 
-function NavLink({ href, emoji, label, soon, onClick }: { href: string; emoji: string; label: string; soon?: boolean; onClick?: () => void }) {
+function NavLink({ href, emoji, label, soon, onClick }: {
+  href: string; emoji: string; label: string; soon?: boolean; onClick?: () => void
+}) {
   const pathname = usePathname();
   const isActive = pathname === href;
   return (
@@ -27,16 +29,10 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [mobileOpen]);
 
@@ -58,43 +54,45 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Hamburger button — mobile only */}
+      {/* Hamburger — mobile only, shown via CSS */}
       <button
         onClick={() => setMobileOpen(true)}
-        style={{
-          display: "none",
-          position: "fixed", top: 12, left: 12, zIndex: 200,
-          background: "#111", border: "1px solid #2a2a2a", borderRadius: 8,
-          color: "#fb923c", cursor: "pointer", padding: "8px 10px", fontSize: 18,
-          lineHeight: 1,
-        }}
         className="vhh-hamburger"
         aria-label="Open menu"
-      >
-        ☰
-      </button>
+        style={{
+          display: "none",
+          position: "fixed", top: 12, left: 12, zIndex: 300,
+          background: "#111", border: "1px solid #2a2a2a", borderRadius: 8,
+          color: "#fb923c", cursor: "pointer", padding: "8px 10px",
+          fontSize: 18, lineHeight: 1,
+        }}
+      >☰</button>
 
-      {/* Overlay — mobile only */}
-      {mobileOpen && (
-        <div
-          onClick={() => setMobileOpen(false)}
-          style={{
-            display: "none",
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
-            zIndex: 149,
-          }}
-          className="vhh-overlay"
-        />
-      )}
+      {/* Dark overlay behind sidebar on mobile */}
+      <div
+        onClick={() => setMobileOpen(false)}
+        className={`vhh-overlay${mobileOpen ? " vhh-overlay-open" : ""}`}
+        style={{
+          display: "none",
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.6)",
+          zIndex: 149,
+        }}
+      />
 
-      {/* Sidebar */}
+      {/* Sidebar panel */}
       <div
         className={`vhh-sidebar${mobileOpen ? " vhh-sidebar-open" : ""}`}
         style={{
-          width: 220, background: "#111", borderRight: "1px solid #1e1e1e",
-          display: "flex", flexDirection: "column",
-          position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 150,
-          willChange: "transform",
+          width: 220,
+          background: "#111",
+          borderRight: "1px solid #1e1e1e",
+          display: "flex",
+          flexDirection: "column",
+          position: "fixed",
+          top: 0, left: 0,
+          height: "100vh",
+          zIndex: 150,
         }}
       >
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -109,12 +107,16 @@ export default function Sidebar() {
 
       <style>{`
         @media (max-width: 768px) {
-          .vhh-hamburger { display: block !important; }
-          .vhh-overlay { display: block !important; }
+          .vhh-hamburger {
+            display: block !important;
+          }
+          .vhh-overlay-open {
+            display: block !important;
+          }
           .vhh-sidebar {
             transform: translateX(-100%);
             transition: transform 0.25s ease;
-            position: fixed !important;
+            will-change: transform;
           }
           .vhh-sidebar-open {
             transform: translateX(0) !important;
