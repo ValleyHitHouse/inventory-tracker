@@ -9,7 +9,7 @@ const VALLEY_SPLIT = 0.30;
 const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "Bubble mailers", "Boxes (S)", "Boxes (M)", "Boxes (L)", "MagPros"];
 const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "Shipping labels", "Packing tape", "Packing paper"];
 
-const BOX_TYPES = [
+const DEFAULT_BOX_TYPES = [
   { key: "jumbo_hobby_count", label: "Jumbo Hobby", settingsKey: "jumbo_hobby_price" },
   { key: "hobby_count", label: "Hobby", settingsKey: "hobby_price" },
   { key: "double_mega_count", label: "Double Mega", settingsKey: "double_mega_price" },
@@ -81,6 +81,13 @@ function calcSupplyEstimates(csvData: any[]) {
   return estimates;
 }
 
+interface CustomBoxType {
+  id: string;
+  label: string;
+  marketValue: string;
+  count: number;
+}
+
 export default function Breaks() {
   const [breaks, setBreaks] = useState<any[]>([]);
   const [view, setView] = useState<"list" | "new">("list");
@@ -88,6 +95,11 @@ export default function Breaks() {
   const [boxName, setBoxName] = useState("");
   const [boxCounts, setBoxCounts] = useState<Record<string, number>>({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
   const [promotionTotal, setPromotionTotal] = useState("");
+  const [manualRevenueBefore, setManualRevenueBefore] = useState("");
+  const [customBoxTypes, setCustomBoxTypes] = useState<CustomBoxType[]>([]);
+  const [showAddBox, setShowAddBox] = useState(false);
+  const [newBoxLabel, setNewBoxLabel] = useState("");
+  const [newBoxValue, setNewBoxValue] = useState("");
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvName, setCsvName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -169,16 +181,49 @@ export default function Breaks() {
     setBobaFormBreak(null);
   }
 
-  const totalBoxes = Object.values(boxCounts).reduce((s, v) => s + v, 0);
-  const marketValue = BOX_TYPES.reduce((sum, bt) => sum + (boxCounts[bt.key] || 0) * (marketPrices[bt.settingsKey] || 0), 0);
-  const revenueBeforeCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0") + parseFloat(r.coupon_price || "0"), 0);
+  function addCustomBox() {
+    if (!newBoxLabel.trim()) return;
+    const id = `custom_${Date.now()}`;
+    setCustomBoxTypes(prev => [...prev, {
+      id, label: newBoxLabel.trim(),
+      marketValue: newBoxValue || "0", count: 0
+    }]);
+    setNewBoxLabel(""); setNewBoxValue(""); setShowAddBox(false);
+  }
+
+  function removeCustomBox(id: string) {
+    setCustomBoxTypes(prev => prev.filter(b => b.id !== id));
+  }
+
+  function updateCustomBoxCount(id: string, count: number) {
+    setCustomBoxTypes(prev => prev.map(b => b.id === id ? { ...b, count: Math.max(0, count) } : b));
+  }
+
+  function updateCustomBoxValue(id: string, value: string) {
+    setCustomBoxTypes(prev => prev.map(b => b.id === id ? { ...b, marketValue: value } : b));
+  }
+
+  const totalBoxes = Object.values(boxCounts).reduce((s, v) => s + v, 0)
+    + customBoxTypes.reduce((s, b) => s + b.count, 0);
+
+  const defaultMarketValue = DEFAULT_BOX_TYPES.reduce((sum, bt) =>
+    sum + (boxCounts[bt.key] || 0) * (marketPrices[bt.settingsKey] || 0), 0);
+  const customMarketValue = customBoxTypes.reduce((sum, b) =>
+    sum + b.count * parseFloat(b.marketValue || "0"), 0);
+  const marketValue = defaultMarketValue + customMarketValue;
+
+  const revenueBeforeCoupons = manualRevenueBefore
+    ? parseFloat(manualRevenueBefore)
+    : csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
+
   const couponTotal = csvData.reduce((s, r) => s + parseFloat(r.coupon_price || "0"), 0);
   const revenueAfterCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
-  const whatnotFees = revenueAfterCoupons * WHATNOT_FEE;
-  const revenueAfterFees = revenueAfterCoupons - whatnotFees;
+  const whatnotFees = revenueBeforeCoupons * WHATNOT_FEE;
+  const revenueAfterFees = revenueBeforeCoupons - whatnotFees;
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
   const freeGiveaways = csvData.filter(r => parseFloat(r.original_item_price || "0") === 0).length;
-  const percentToMarket = marketValue > 0 ? (revenueAfterCoupons / marketValue) * 100 : 0;
+  const percentToMarket = marketValue > 0 ? (revenueBeforeCoupons / marketValue) * 100 : 0;
+
   const chaserCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Chasers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const insuranceCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Insurance").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const firstTimerCost = Object.values(pickedCards).filter(({ item }) => item.subset === "First Timers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
@@ -253,8 +298,11 @@ export default function Breaks() {
 
   async function saveBreak() {
     setSaving(true);
+    const customBoxSummary = customBoxTypes.filter(b => b.count > 0).map(b => `${b.label} x${b.count}`).join(", ");
+    const fullBoxName = customBoxSummary ? `${boxName}${boxName ? " + " : ""}${customBoxSummary}` : boxName;
+
     const { data: brk } = await supabase.from("Breaks").insert({
-      date, box_name: boxName, num_boxes: totalBoxes,
+      date, box_name: fullBoxName, num_boxes: totalBoxes,
       jumbo_hobby_count: boxCounts.jumbo_hobby_count, hobby_count: boxCounts.hobby_count,
       double_mega_count: boxCounts.double_mega_count, blaster_count: boxCounts.blaster_count,
       market_value: Math.round(marketValue * 100) / 100, box_value: 0,
@@ -318,6 +366,7 @@ export default function Breaks() {
     setPickedCards({}); setCardSearch("");
     setSupplyEstimates({}); setEditedEstimates({});
     setMagPros(""); setSuppliesDeducted(false); setPromotionTotal("");
+    setManualRevenueBefore(""); setCustomBoxTypes([]);
   }
 
   const s = {
@@ -354,7 +403,7 @@ export default function Breaks() {
     const revBeforeAll = parseFloat(b.revenue_before_fees || "0") > 0
       ? parseFloat(b.revenue_before_fees)
       : parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE);
-    const whatnotFeesForBreak = (parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE)) * WHATNOT_FEE;
+    const whatnotFeesForBreak = revBeforeAll * WHATNOT_FEE;
     const totalSupplyCost = parseFloat(b.total_supply_cost || "0");
     const streamExpensesText =
       `Coupon Total: $${parseFloat(b.coupon_total || "0").toFixed(2)}\n` +
@@ -451,7 +500,6 @@ export default function Breaks() {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {breaks.map(b => (
               <div key={b.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 16 }}>
-                {/* Top row: date + box + boba status */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: "#e5e5e5" }}>{b.box_name || "—"}</div>
@@ -465,8 +513,6 @@ export default function Breaks() {
                     </button>
                   )}
                 </div>
-
-                {/* Stats row */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 }}>
                   <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
                     <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Revenue</div>
@@ -485,8 +531,6 @@ export default function Breaks() {
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80" }}>{b.valley_take ? `$${parseFloat(b.valley_take).toFixed(2)}` : "—"}</div>
                   </div>
                 </div>
-
-                {/* Actions row */}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <a href={`/breaks/${b.id}`} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 12px", textDecoration: "none" }}>View</a>
                   {confirmId === b.id ? (
@@ -518,19 +562,40 @@ export default function Breaks() {
           <button onClick={() => setView("list")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
 
+        {/* Break details */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Break details</div>
           <div className="breaks-grid-2">
             <div><label style={s.label}>Date of break</label><input style={s.input} type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
             <div><label style={s.label}>Box product name</label><input style={s.input} type="text" placeholder="e.g. Griffey Break" value={boxName} onChange={e => setBoxName(e.target.value)} /></div>
           </div>
-          <div><label style={s.label}>Promotion total ($)</label><input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} /></div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={s.label}>Promotion total ($)</label>
+            <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} />
+          </div>
+          <div>
+            <label style={s.label}>
+              Whatnot post-show total sales ($)
+              <span style={{ color: "#fb923c", marginLeft: 6 }}>— from your post-show email</span>
+            </label>
+            <input
+              style={s.input}
+              type="number" min={0} step="0.01"
+              placeholder="e.g. 25399.00 (leave blank to auto-calculate from CSV)"
+              value={manualRevenueBefore}
+              onChange={e => setManualRevenueBefore(e.target.value)}
+            />
+            <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
+              This is the "Total Sales" figure from your Whatnot post-show email — used for BOBA reporting and fee calculations
+            </div>
+          </div>
         </div>
 
+        {/* Box breakdown */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Box breakdown</div>
-          <div className="breaks-grid-4">
-            {BOX_TYPES.map(bt => (
+          <div className="breaks-grid-4" style={{ marginBottom: 12 }}>
+            {DEFAULT_BOX_TYPES.map(bt => (
               <div key={bt.key}>
                 <label style={s.label}>{bt.label}</label>
                 <input style={s.input} type="number" min={0} value={boxCounts[bt.key] || 0} onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))} />
@@ -538,12 +603,76 @@ export default function Breaks() {
               </div>
             ))}
           </div>
+
+          {/* Custom box types */}
+          {customBoxTypes.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Custom box types</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {customBoxTypes.map(cb => (
+                  <div key={cb.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e5e5e5", marginBottom: 4 }}>{cb.label}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 11, color: "#555" }}>Mkt value $</span>
+                        <input
+                          type="number" min={0} step="0.01"
+                          value={cb.marketValue}
+                          onChange={e => updateCustomBoxValue(cb.id, e.target.value)}
+                          style={{ ...s.smallInput, width: 80 }}
+                        />
+                        <span style={{ fontSize: 11, color: "#555" }}>each</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => updateCustomBoxCount(cb.id, cb.count - 1)} style={{ width: 28, height: 28, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 14 }}>−</button>
+                      <span style={{ fontSize: 15, fontWeight: 700, minWidth: 24, textAlign: "center", color: "#e5e5e5" }}>{cb.count}</span>
+                      <button onClick={() => updateCustomBoxCount(cb.id, cb.count + 1)} style={{ width: 28, height: 28, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 14 }}>+</button>
+                    </div>
+                    {cb.count > 0 && <div style={{ fontSize: 11, color: "#fb923c" }}>Mkt: ${(cb.count * parseFloat(cb.marketValue || "0")).toFixed(2)}</div>}
+                    <button onClick={() => removeCustomBox(cb.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "3px 8px", cursor: "pointer", marginLeft: "auto" }}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add custom box */}
+          {showAddBox ? (
+            <div style={{ background: "#0f0f0f", border: "1px solid #a78bfa44", borderRadius: 8, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>New box type</div>
+              <div className="breaks-grid-2" style={{ marginBottom: 10 }}>
+                <div>
+                  <label style={s.label}>Box type name</label>
+                  <input style={s.input} placeholder="e.g. Mega Box" value={newBoxLabel} onChange={e => setNewBoxLabel(e.target.value)} />
+                </div>
+                <div>
+                  <label style={s.label}>Market value per box ($)</label>
+                  <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 89.99" value={newBoxValue} onChange={e => setNewBoxValue(e.target.value)} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={addCustomBox} style={{ background: "#a78bfa22", border: "1px solid #a78bfa", color: "#a78bfa", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  + Add box type
+                </button>
+                <button onClick={() => { setShowAddBox(false); setNewBoxLabel(""); setNewBoxValue(""); }} style={{ background: "none", border: "1px solid #333", color: "#555", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowAddBox(true)} style={{ background: "none", border: "1px dashed #333", color: "#555", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", marginBottom: 12, width: "100%" }}>
+              + Add custom box type
+            </button>
+          )}
+
           <div className="breaks-stat-2">
             <div style={s.stat}><div style={s.statLabel}>Total boxes</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div></div>
             <div style={s.stat}><div style={s.statLabel}>Market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
           </div>
         </div>
 
+        {/* Cards used */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Cards used in this break</div>
           <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Search your card inventory — selected cards will be deducted when break is saved</p>
@@ -592,6 +721,7 @@ export default function Breaks() {
           )}
         </div>
 
+        {/* Upload CSV */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Upload Whatnot CSV</div>
           <label style={{ display: "block", border: "1px dashed #333", borderRadius: 8, padding: 24, textAlign: "center", cursor: "pointer", background: "#0f0f0f" }}>
@@ -602,6 +732,11 @@ export default function Breaks() {
           {csvData.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 10 }}>Revenue breakdown</div>
+              {manualRevenueBefore && (
+                <div style={{ background: "#fb923c11", border: "1px solid #fb923c33", borderRadius: 8, padding: "10px 14px", marginBottom: 10, fontSize: 12, color: "#fb923c" }}>
+                  Using manual revenue figure: ${parseFloat(manualRevenueBefore).toFixed(2)} (from post-show email)
+                </div>
+              )}
               <div className="breaks-grid-4" style={{ marginBottom: 10 }}>
                 <div style={s.stat}><div style={s.statLabel}>Before coupons</div><div style={{ ...s.statValue, color: "#e5e5e5", fontSize: 16 }}>${revenueBeforeCoupons.toFixed(2)}</div></div>
                 <div style={s.stat}><div style={s.statLabel}>Coupon spend</div><div style={{ ...s.statValue, color: "#f87171", fontSize: 16 }}>-${couponTotal.toFixed(2)}</div></div>
@@ -618,6 +753,7 @@ export default function Breaks() {
           )}
         </div>
 
+        {/* Supply estimates */}
         {csvData.length > 0 && Object.keys(supplyEstimates).length > 0 && (
           <div style={s.section}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -675,6 +811,7 @@ export default function Breaks() {
           </div>
         )}
 
+        {/* Financials */}
         {csvData.length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>💰 Break financials & IMC split</div>
