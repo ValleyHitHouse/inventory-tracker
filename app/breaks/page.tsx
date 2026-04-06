@@ -81,11 +81,10 @@ function calcSupplyEstimates(csvData: any[]) {
   return estimates;
 }
 
-interface CustomBoxType {
+interface ExtraBoxType {
   id: string;
   label: string;
-  marketValue: string;
-  count: number;
+  price: string;
 }
 
 export default function Breaks() {
@@ -94,12 +93,10 @@ export default function Breaks() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [boxName, setBoxName] = useState("");
   const [boxCounts, setBoxCounts] = useState<Record<string, number>>({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
+  const [extraBoxTypes, setExtraBoxTypes] = useState<ExtraBoxType[]>([]);
+  const [extraBoxCounts, setExtraBoxCounts] = useState<Record<string, number>>({});
   const [promotionTotal, setPromotionTotal] = useState("");
   const [manualRevenueBefore, setManualRevenueBefore] = useState("");
-  const [customBoxTypes, setCustomBoxTypes] = useState<CustomBoxType[]>([]);
-  const [showAddBox, setShowAddBox] = useState(false);
-  const [newBoxLabel, setNewBoxLabel] = useState("");
-  const [newBoxValue, setNewBoxValue] = useState("");
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvName, setCsvName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -160,6 +157,10 @@ export default function Breaks() {
       const prices: Record<string, number> = {};
       for (const row of data) prices[row.key] = parseFloat(row.value || "0");
       setMarketPrices(prices);
+      const extraRow = data.find(r => r.key === "extra_box_types");
+      if (extraRow?.value) {
+        try { setExtraBoxTypes(JSON.parse(extraRow.value)); } catch {}
+      }
     }
   }
 
@@ -181,43 +182,21 @@ export default function Breaks() {
     setBobaFormBreak(null);
   }
 
-  function addCustomBox() {
-    if (!newBoxLabel.trim()) return;
-    const id = `custom_${Date.now()}`;
-    setCustomBoxTypes(prev => [...prev, {
-      id, label: newBoxLabel.trim(),
-      marketValue: newBoxValue || "0", count: 0
-    }]);
-    setNewBoxLabel(""); setNewBoxValue(""); setShowAddBox(false);
-  }
-
-  function removeCustomBox(id: string) {
-    setCustomBoxTypes(prev => prev.filter(b => b.id !== id));
-  }
-
-  function updateCustomBoxCount(id: string, count: number) {
-    setCustomBoxTypes(prev => prev.map(b => b.id === id ? { ...b, count: Math.max(0, count) } : b));
-  }
-
-  function updateCustomBoxValue(id: string, value: string) {
-    setCustomBoxTypes(prev => prev.map(b => b.id === id ? { ...b, marketValue: value } : b));
-  }
-
+  // --- Calculations ---
   const totalBoxes = Object.values(boxCounts).reduce((s, v) => s + v, 0)
-    + customBoxTypes.reduce((s, b) => s + b.count, 0);
+    + Object.values(extraBoxCounts).reduce((s, v) => s + v, 0);
 
   const defaultMarketValue = DEFAULT_BOX_TYPES.reduce((sum, bt) =>
     sum + (boxCounts[bt.key] || 0) * (marketPrices[bt.settingsKey] || 0), 0);
-  const customMarketValue = customBoxTypes.reduce((sum, b) =>
-    sum + b.count * parseFloat(b.marketValue || "0"), 0);
-  const marketValue = defaultMarketValue + customMarketValue;
+  const extraMarketValue = extraBoxTypes.reduce((sum, bt) =>
+    sum + (extraBoxCounts[bt.id] || 0) * parseFloat(bt.price || "0"), 0);
+  const marketValue = defaultMarketValue + extraMarketValue;
 
   const revenueBeforeCoupons = manualRevenueBefore
     ? parseFloat(manualRevenueBefore)
     : csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
 
   const couponTotal = csvData.reduce((s, r) => s + parseFloat(r.coupon_price || "0"), 0);
-  const revenueAfterCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
   const whatnotFees = revenueBeforeCoupons * WHATNOT_FEE;
   const revenueAfterFees = revenueBeforeCoupons - whatnotFees;
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
@@ -298,18 +277,30 @@ export default function Breaks() {
 
   async function saveBreak() {
     setSaving(true);
-    const customBoxSummary = customBoxTypes.filter(b => b.count > 0).map(b => `${b.label} x${b.count}`).join(", ");
-    const fullBoxName = customBoxSummary ? `${boxName}${boxName ? " + " : ""}${customBoxSummary}` : boxName;
+    const extraBoxSummary = extraBoxTypes
+      .filter(bt => (extraBoxCounts[bt.id] || 0) > 0)
+      .map(bt => `${bt.label} x${extraBoxCounts[bt.id]}`)
+      .join(", ");
+    const fullBoxName = extraBoxSummary
+      ? `${boxName}${boxName ? " + " : ""}${extraBoxSummary}`
+      : boxName;
 
     const { data: brk } = await supabase.from("Breaks").insert({
       date, box_name: fullBoxName, num_boxes: totalBoxes,
-      jumbo_hobby_count: boxCounts.jumbo_hobby_count, hobby_count: boxCounts.hobby_count,
-      double_mega_count: boxCounts.double_mega_count, blaster_count: boxCounts.blaster_count,
-      market_value: Math.round(marketValue * 100) / 100, box_value: 0,
-      revenue: Math.round(revenueAfterFees * 100) / 100, spots_sold: spotsSold,
-      free_giveaways: freeGiveaways, net_profit: Math.round(profitAfterExpenses * 100) / 100,
-      imc_take: Math.round(imcTake * 100) / 100, valley_take: Math.round(valleyTake * 100) / 100,
-      boba_submitted: false, coupon_total: Math.round(couponTotal * 100) / 100,
+      jumbo_hobby_count: boxCounts.jumbo_hobby_count,
+      hobby_count: boxCounts.hobby_count,
+      double_mega_count: boxCounts.double_mega_count,
+      blaster_count: boxCounts.blaster_count,
+      market_value: Math.round(marketValue * 100) / 100,
+      box_value: 0,
+      revenue: Math.round(revenueAfterFees * 100) / 100,
+      spots_sold: spotsSold,
+      free_giveaways: freeGiveaways,
+      net_profit: Math.round(profitAfterExpenses * 100) / 100,
+      imc_take: Math.round(imcTake * 100) / 100,
+      valley_take: Math.round(valleyTake * 100) / 100,
+      boba_submitted: false,
+      coupon_total: Math.round(couponTotal * 100) / 100,
       promotion_total: Math.round(parseFloat(promotionTotal || "0") * 100) / 100,
       total_supply_cost: Math.round((imcSupplyCost + valleySupplyCost) * 100) / 100,
       chaser_cost: Math.round(chaserCost * 100) / 100,
@@ -363,10 +354,11 @@ export default function Breaks() {
     setSaving(false); setView("list");
     setCsvData([]); setCsvName(""); setBoxName("");
     setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
+    setExtraBoxCounts({});
     setPickedCards({}); setCardSearch("");
     setSupplyEstimates({}); setEditedEstimates({});
-    setMagPros(""); setSuppliesDeducted(false); setPromotionTotal("");
-    setManualRevenueBefore(""); setCustomBoxTypes([]);
+    setMagPros(""); setSuppliesDeducted(false);
+    setPromotionTotal(""); setManualRevenueBefore("");
   }
 
   const s = {
@@ -389,11 +381,13 @@ export default function Breaks() {
     .breaks-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
     .breaks-grid-4b { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     .breaks-stat-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .breaks-extra-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 768px) {
       .breaks-grid-2 { grid-template-columns: 1fr; }
       .breaks-grid-4 { grid-template-columns: 1fr 1fr; }
       .breaks-grid-4b { grid-template-columns: 1fr 1fr; }
       .breaks-stat-2 { grid-template-columns: 1fr 1fr; }
+      .breaks-extra-boxes { grid-template-columns: 1fr 1fr; }
     }
   `;
 
@@ -420,7 +414,11 @@ export default function Breaks() {
       { label: "How many Jumbo boxes", value: String(b.jumbo_hobby_count || 0) },
       { label: "How many D-Mega boxes", value: String(b.double_mega_count || 0) },
       { label: "Wonders product", value: "None" },
-      { label: "Other product", value: b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "None" },
+      { label: "Other product", value: [
+          b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "",
+          ...extraBoxTypes.filter(bt => (extraBoxCounts[bt.id] || 0) > 0).map(bt => `${bt.label} x${extraBoxCounts[bt.id] || 0}`)
+        ].filter(Boolean).join(", ") || "None"
+      },
       { label: "Total revenue generated (before fees & coupons)", value: revBeforeAll.toFixed(2) },
       { label: "Total Whatnot fees", value: whatnotFeesForBreak.toFixed(2) },
       { label: "Stream expenses", value: streamExpensesText },
@@ -586,7 +584,7 @@ export default function Breaks() {
               onChange={e => setManualRevenueBefore(e.target.value)}
             />
             <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
-              This is the "Total Sales" figure from your Whatnot post-show email — used for BOBA reporting and fee calculations
+              Enter the "Total Sales" figure from your Whatnot post-show email for accurate BOBA reporting
             </div>
           </div>
         </div>
@@ -594,81 +592,71 @@ export default function Breaks() {
         {/* Box breakdown */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Box breakdown</div>
-          <div className="breaks-grid-4" style={{ marginBottom: 12 }}>
+
+          {/* Default boxes */}
+          <div className="breaks-grid-4" style={{ marginBottom: extraBoxTypes.length > 0 ? 16 : 12 }}>
             {DEFAULT_BOX_TYPES.map(bt => (
               <div key={bt.key}>
                 <label style={s.label}>{bt.label}</label>
-                <input style={s.input} type="number" min={0} value={boxCounts[bt.key] || 0} onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))} />
-                {marketPrices[bt.settingsKey] > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Mkt: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}</div>}
+                <input
+                  style={s.input} type="number" min={0}
+                  value={boxCounts[bt.key] || 0}
+                  onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))}
+                />
+                {marketPrices[bt.settingsKey] > 0 && (
+                  <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>
+                    Mkt: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}
+                  </div>
+                )}
               </div>
             ))}
           </div>
 
-          {/* Custom box types */}
-          {customBoxTypes.length > 0 && (
+          {/* Extra box types from settings */}
+          {extraBoxTypes.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Custom box types</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {customBoxTypes.map(cb => (
-                  <div key={cb.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 120 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e5e5e5", marginBottom: 4 }}>{cb.label}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 11, color: "#555" }}>Mkt value $</span>
-                        <input
-                          type="number" min={0} step="0.01"
-                          value={cb.marketValue}
-                          onChange={e => updateCustomBoxValue(cb.id, e.target.value)}
-                          style={{ ...s.smallInput, width: 80 }}
-                        />
-                        <span style={{ fontSize: 11, color: "#555" }}>each</span>
+              <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>
+                Extra box types
+              </div>
+              <div className="breaks-extra-boxes">
+                {extraBoxTypes.map(bt => (
+                  <div key={bt.id}>
+                    <label style={s.label}>{bt.label}</label>
+                    <input
+                      style={s.input} type="number" min={0}
+                      value={extraBoxCounts[bt.id] || 0}
+                      onChange={e => setExtraBoxCounts(prev => ({ ...prev, [bt.id]: parseInt(e.target.value) || 0 }))}
+                    />
+                    {parseFloat(bt.price) > 0 && (
+                      <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>
+                        Mkt: ${(parseFloat(bt.price) * (extraBoxCounts[bt.id] || 0)).toFixed(2)}
                       </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <button onClick={() => updateCustomBoxCount(cb.id, cb.count - 1)} style={{ width: 28, height: 28, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 14 }}>−</button>
-                      <span style={{ fontSize: 15, fontWeight: 700, minWidth: 24, textAlign: "center", color: "#e5e5e5" }}>{cb.count}</span>
-                      <button onClick={() => updateCustomBoxCount(cb.id, cb.count + 1)} style={{ width: 28, height: 28, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 14 }}>+</button>
-                    </div>
-                    {cb.count > 0 && <div style={{ fontSize: 11, color: "#fb923c" }}>Mkt: ${(cb.count * parseFloat(cb.marketValue || "0")).toFixed(2)}</div>}
-                    <button onClick={() => removeCustomBox(cb.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "3px 8px", cursor: "pointer", marginLeft: "auto" }}>Remove</button>
+                    )}
                   </div>
                 ))}
               </div>
+              <div style={{ fontSize: 11, color: "#555", marginTop: 8 }}>
+                To add/remove box types, go to <a href="/settings" style={{ color: "#fb923c", textDecoration: "none" }}>Settings → Extra box types</a>
+              </div>
             </div>
           )}
 
-          {/* Add custom box */}
-          {showAddBox ? (
-            <div style={{ background: "#0f0f0f", border: "1px solid #a78bfa44", borderRadius: 8, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>New box type</div>
-              <div className="breaks-grid-2" style={{ marginBottom: 10 }}>
-                <div>
-                  <label style={s.label}>Box type name</label>
-                  <input style={s.input} placeholder="e.g. Mega Box" value={newBoxLabel} onChange={e => setNewBoxLabel(e.target.value)} />
-                </div>
-                <div>
-                  <label style={s.label}>Market value per box ($)</label>
-                  <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 89.99" value={newBoxValue} onChange={e => setNewBoxValue(e.target.value)} />
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={addCustomBox} style={{ background: "#a78bfa22", border: "1px solid #a78bfa", color: "#a78bfa", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  + Add box type
-                </button>
-                <button onClick={() => { setShowAddBox(false); setNewBoxLabel(""); setNewBoxValue(""); }} style={{ background: "none", border: "1px solid #333", color: "#555", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
-                  Cancel
-                </button>
-              </div>
+          {extraBoxTypes.length === 0 && (
+            <div style={{ fontSize: 11, color: "#444", marginBottom: 12 }}>
+              Need a different box type? Add it in <a href="/settings" style={{ color: "#555", textDecoration: "none" }}>Settings → Extra box types</a>
             </div>
-          ) : (
-            <button onClick={() => setShowAddBox(true)} style={{ background: "none", border: "1px dashed #333", color: "#555", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer", marginBottom: 12, width: "100%" }}>
-              + Add custom box type
-            </button>
           )}
 
+          {/* Totals */}
           <div className="breaks-stat-2">
-            <div style={s.stat}><div style={s.statLabel}>Total boxes</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div></div>
-            <div style={s.stat}><div style={s.statLabel}>Market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
+            <div style={s.stat}>
+              <div style={s.statLabel}>Total boxes</div>
+              <div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div>
+            </div>
+            <div style={s.stat}>
+              <div style={s.statLabel}>Market value</div>
+              <div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div>
+            </div>
           </div>
         </div>
 
@@ -734,7 +722,7 @@ export default function Breaks() {
               <div style={{ fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 10 }}>Revenue breakdown</div>
               {manualRevenueBefore && (
                 <div style={{ background: "#fb923c11", border: "1px solid #fb923c33", borderRadius: 8, padding: "10px 14px", marginBottom: 10, fontSize: 12, color: "#fb923c" }}>
-                  Using manual revenue figure: ${parseFloat(manualRevenueBefore).toFixed(2)} (from post-show email)
+                  ✓ Using manual figure: ${parseFloat(manualRevenueBefore).toFixed(2)} from post-show email
                 </div>
               )}
               <div className="breaks-grid-4" style={{ marginBottom: 10 }}>
