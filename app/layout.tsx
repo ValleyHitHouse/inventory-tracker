@@ -37,6 +37,14 @@ function Inner({ children }: { children: React.ReactNode }) {
           .vhh-main {
             margin-left: 0 !important;
             padding-top: 56px;
+            width: 100vw;
+            max-width: 100vw;
+            overflow-x: hidden;
+          }
+          html, body {
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100vw;
           }
         }
       `}</style>

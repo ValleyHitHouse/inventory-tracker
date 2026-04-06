@@ -27,12 +27,10 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close sidebar on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
-  // Prevent body scroll when sidebar open on mobile
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = "hidden";
@@ -89,7 +87,7 @@ export default function Sidebar() {
         />
       )}
 
-      {/* Sidebar — desktop fixed, mobile drawer */}
+      {/* Sidebar */}
       <div
         className={`vhh-sidebar${mobileOpen ? " vhh-sidebar-open" : ""}`}
         style={{
@@ -116,6 +114,7 @@ export default function Sidebar() {
           .vhh-sidebar {
             transform: translateX(-100%);
             transition: transform 0.25s ease;
+            position: fixed !important;
           }
           .vhh-sidebar-open {
             transform: translateX(0) !important;
