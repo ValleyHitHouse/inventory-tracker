@@ -83,7 +83,7 @@ function calcSupplyEstimates(csvData: any[]) {
 
 export default function Breaks() {
   const [breaks, setBreaks] = useState<any[]>([]);
-  const [view, setView] = useState<"list"|"new">("list");
+  const [view, setView] = useState<"list" | "new">("list");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [boxName, setBoxName] = useState("");
   const [boxCounts, setBoxCounts] = useState<Record<string, number>>({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
@@ -99,7 +99,7 @@ export default function Breaks() {
   const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
   const [cardInventory, setCardInventory] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
-  const [pickedCards, setPickedCards] = useState<Record<string, {item: any, qty: number}>>({});
+  const [pickedCards, setPickedCards] = useState<Record<string, { item: any; qty: number }>>({});
   const [supplyEstimates, setSupplyEstimates] = useState<Record<string, number>>({});
   const [editedEstimates, setEditedEstimates] = useState<Record<string, number>>({});
   const [magPros, setMagPros] = useState("");
@@ -108,10 +108,7 @@ export default function Breaks() {
   const [inventoryPrices, setInventoryPrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    loadBreaks();
-    loadCardInventory();
-    loadInventoryPrices();
-    loadMarketPrices();
+    loadBreaks(); loadCardInventory(); loadInventoryPrices(); loadMarketPrices();
   }, []);
 
   useEffect(() => {
@@ -160,8 +157,7 @@ export default function Breaks() {
     await supabase.from("BreakChasers").delete().eq("break_id", id);
     await supabase.from("BreakSupplies").delete().eq("break_id", id);
     await supabase.from("Breaks").delete().eq("id", id);
-    setDeletingId(null);
-    setConfirmId(null);
+    setDeletingId(null); setConfirmId(null);
     loadBreaks();
   }
 
@@ -175,7 +171,6 @@ export default function Breaks() {
 
   const totalBoxes = Object.values(boxCounts).reduce((s, v) => s + v, 0);
   const marketValue = BOX_TYPES.reduce((sum, bt) => sum + (boxCounts[bt.key] || 0) * (marketPrices[bt.settingsKey] || 0), 0);
-
   const revenueBeforeCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0") + parseFloat(r.coupon_price || "0"), 0);
   const couponTotal = csvData.reduce((s, r) => s + parseFloat(r.coupon_price || "0"), 0);
   const revenueAfterCoupons = csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
@@ -184,11 +179,9 @@ export default function Breaks() {
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
   const freeGiveaways = csvData.filter(r => parseFloat(r.original_item_price || "0") === 0).length;
   const percentToMarket = marketValue > 0 ? (revenueAfterCoupons / marketValue) * 100 : 0;
-
   const chaserCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Chasers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const insuranceCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Insurance").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const firstTimerCost = Object.values(pickedCards).filter(({ item }) => item.subset === "First Timers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
-
   const allEstimates: Record<string, number> = { ...editedEstimates, ...(magPros ? { "MagPros": parseInt(magPros) } : {}) };
 
   function getSupplyCost(name: string, qty: number): number {
@@ -210,7 +203,7 @@ export default function Breaks() {
     if (c.quantity <= 0) return false;
     const q = cardSearch.toLowerCase().trim();
     const combined = [c.hero, c.athlete, c.card_number, c.subset, c.weapon, c.variation].join(" ").toLowerCase();
-    return !q || q.split(" ").filter(Boolean).every(word => combined.includes(word));
+    return !q || q.split(" ").filter(Boolean).every((word: string) => combined.includes(word));
   }).slice(0, 50);
 
   function pickCard(item: any) {
@@ -261,22 +254,14 @@ export default function Breaks() {
   async function saveBreak() {
     setSaving(true);
     const { data: brk } = await supabase.from("Breaks").insert({
-      date, box_name: boxName,
-      num_boxes: totalBoxes,
-      jumbo_hobby_count: boxCounts.jumbo_hobby_count,
-      hobby_count: boxCounts.hobby_count,
-      double_mega_count: boxCounts.double_mega_count,
-      blaster_count: boxCounts.blaster_count,
-      market_value: Math.round(marketValue * 100) / 100,
-      box_value: 0,
-      revenue: Math.round(revenueAfterFees * 100) / 100,
-      spots_sold: spotsSold,
-      free_giveaways: freeGiveaways,
-      net_profit: Math.round(profitAfterExpenses * 100) / 100,
-      imc_take: Math.round(imcTake * 100) / 100,
-      valley_take: Math.round(valleyTake * 100) / 100,
-      boba_submitted: false,
-      coupon_total: Math.round(couponTotal * 100) / 100,
+      date, box_name: boxName, num_boxes: totalBoxes,
+      jumbo_hobby_count: boxCounts.jumbo_hobby_count, hobby_count: boxCounts.hobby_count,
+      double_mega_count: boxCounts.double_mega_count, blaster_count: boxCounts.blaster_count,
+      market_value: Math.round(marketValue * 100) / 100, box_value: 0,
+      revenue: Math.round(revenueAfterFees * 100) / 100, spots_sold: spotsSold,
+      free_giveaways: freeGiveaways, net_profit: Math.round(profitAfterExpenses * 100) / 100,
+      imc_take: Math.round(imcTake * 100) / 100, valley_take: Math.round(valleyTake * 100) / 100,
+      boba_submitted: false, coupon_total: Math.round(couponTotal * 100) / 100,
       promotion_total: Math.round(parseFloat(promotionTotal || "0") * 100) / 100,
       total_supply_cost: Math.round((imcSupplyCost + valleySupplyCost) * 100) / 100,
       chaser_cost: Math.round(chaserCost * 100) / 100,
@@ -287,11 +272,8 @@ export default function Breaks() {
       if (Object.keys(pickedCards).length > 0) {
         await supabase.from("BreakChasers").insert(
           Object.values(pickedCards).map(({ item, qty }) => ({
-            break_id: brk.id,
-            name: `${item.hero} (${item.athlete})`,
-            type: item.subset,
-            quantity: qty,
-            value: parseFloat(item.price_paid || "0"),
+            break_id: brk.id, name: `${item.hero} (${item.athlete})`,
+            type: item.subset, quantity: qty, value: parseFloat(item.price_paid || "0"),
           }))
         );
         for (const { item, qty } of Object.values(pickedCards)) {
@@ -317,26 +299,20 @@ export default function Breaks() {
       }
       if (csvData.length) {
         const orderRows = csvData.map(r => ({
-          break_id: brk.id,
-          order_id: r.order_id || null,
-          buyer_username: r.buyer_username || null,
-          product_name: r.product_name || null,
+          break_id: brk.id, order_id: r.order_id || null,
+          buyer_username: r.buyer_username || null, product_name: r.product_name || null,
           price: parseFloat(r.original_item_price || "0"),
           placed_at: r.placed_at ? r.placed_at.trim() : null,
           cancelled: r.cancelled_or_failed === "True",
           tracking_code: r.tracking_code || null,
-          shipping_address: r.shipping_address || null,
-          postal_code: r.postal_code || null,
+          shipping_address: r.shipping_address || null, postal_code: r.postal_code || null,
         }));
-        const { error: ordersError } = await supabase.from("BreakOrders").insert(orderRows);
-        if (ordersError) console.error("BreakOrders insert error:", ordersError);
+        await supabase.from("BreakOrders").insert(orderRows);
       }
     }
 
-    await loadBreaks();
-    await loadCardInventory();
-    setSaving(false);
-    setView("list");
+    await loadBreaks(); await loadCardInventory();
+    setSaving(false); setView("list");
     setCsvData([]); setCsvName(""); setBoxName("");
     setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
     setPickedCards({}); setCardSearch("");
@@ -346,19 +322,31 @@ export default function Breaks() {
 
   const s = {
     shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" },
-    content: { padding: 24, maxWidth: 900, margin: "0 auto" },
+    content: { padding: "24px 16px", maxWidth: 900, margin: "0 auto" },
     section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
     label: { fontSize: 12, color: "#666", marginBottom: 5, display: "block" },
-    input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none" },
+    input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box" as const },
     smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "#e5e5e5", outline: "none", width: 70, textAlign: "center" as const },
-    row: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 },
     submitBtn: { width: "100%", background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", marginTop: 4 },
     stat: { background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px" },
     statLabel: { fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: ".4px" },
     statValue: { fontSize: 20, fontWeight: 700 },
     expenseRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #161616", fontSize: 13 },
   };
+
+  const mobileStyles = `
+    .breaks-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .breaks-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+    .breaks-grid-4b { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .breaks-stat-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 768px) {
+      .breaks-grid-2 { grid-template-columns: 1fr; }
+      .breaks-grid-4 { grid-template-columns: 1fr 1fr; }
+      .breaks-grid-4b { grid-template-columns: 1fr 1fr; }
+      .breaks-stat-2 { grid-template-columns: 1fr 1fr; }
+    }
+  `;
 
   // BOBA FORM VIEW
   if (bobaFormBreak) {
@@ -393,49 +381,48 @@ export default function Breaks() {
     return (
       <div style={s.shell}>
         <div style={s.content}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, paddingTop: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
             <div>
-              <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>BOBA Form — {b.box_name || b.date}</h1>
+              <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>BOBA Form — {b.box_name || b.date}</h1>
               <p style={{ fontSize: 13, color: "#555" }}>Copy each field into the Google Form</p>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => setBobaFormBreak(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
-              <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, width: "auto", padding: "10px 20px", textDecoration: "none", display: "inline-flex", alignItems: "center", marginTop: 0 }}>
+              <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                 Open BOBA Form ↗
               </a>
             </div>
           </div>
 
           <div style={{ ...s.section, borderColor: "#fb923c44" }}>
-            <div style={s.sectionTitle}>💰 Tips received (if any)</div>
+            <div style={s.sectionTitle}>💰 Tips received</div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ color: "#555", fontSize: 13 }}>$</span>
               <input style={{ ...s.input, maxWidth: 200 }} type="number" min={0} step="0.01" placeholder="0.00" value={bobaFormTips} onChange={e => setBobaFormTips(e.target.value)} />
-              <span style={{ fontSize: 12, color: "#555" }}>Included in stream expenses</span>
             </div>
           </div>
 
           <div style={s.section}>
-            <div style={s.sectionTitle}>Form fields — click Copy on each field</div>
+            <div style={s.sectionTitle}>Form fields — tap Copy on each</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {fields.map((field, i) => (
                 <div key={i} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: 14 }}>
                   <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>{field.label}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                     <div style={{ fontSize: 14, color: "#e5e5e5", fontWeight: 500, whiteSpace: "pre-wrap", flex: 1 }}>{field.value}</div>
-                    <button onClick={() => navigator.clipboard.writeText(field.value)} style={{ fontSize: 11, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>Copy</button>
+                    <button onClick={() => navigator.clipboard.writeText(field.value)} style={{ fontSize: 11, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>Copy</button>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 12 }}>
-            <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", flex: 1, marginTop: 0 }}>
               Open BOBA Form ↗
             </a>
             <button onClick={() => markBobaSubmitted(b.id)} disabled={markingSubmitted === b.id} style={{ ...s.submitBtn, flex: 1, background: "linear-gradient(135deg,#166534,#15803d)" }}>
-              {markingSubmitted === b.id ? "Saving..." : "✓ Mark as submitted to BOBA"}
+              {markingSubmitted === b.id ? "Saving..." : "✓ Mark as submitted"}
             </button>
           </div>
         </div>
@@ -446,64 +433,75 @@ export default function Breaks() {
   // LIST VIEW
   if (view === "list") return (
     <div style={s.shell}>
+      <style>{mobileStyles}</style>
       <div style={s.content}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingTop: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Break results</h1>
             <p style={{ fontSize: 13, color: "#555" }}>{breaks.length} breaks logged</p>
           </div>
-          <button onClick={() => setView("new")} style={{ ...s.submitBtn, width: "auto", padding: "10px 20px" }}>+ Log new break</button>
+          <button onClick={() => setView("new")} style={{ ...s.submitBtn, width: "auto", padding: "10px 20px", marginTop: 0 }}>+ Log new break</button>
         </div>
+
         {breaks.length === 0 ? (
           <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
             <p style={{ color: "#555", fontSize: 13 }}>No breaks logged yet.</p>
           </div>
         ) : (
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead><tr style={{ background: "#0f0f0f" }}>
-{["Date","Box","Boxes","Spots","Revenue","Net profit","BOBA take","Valley take","BOBA Form","View",""].map(h => (                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {breaks.map(b => (
-                  <tr key={b.id} style={{ borderBottom: "1px solid #161616" }}>
-                    <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.date}</td>
-                    <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.box_name || "—"}</td>
-                    <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.num_boxes || 0}</td>
-                    <td style={{ padding: "10px 14px", color: "#aaa" }}>{b.spots_sold}</td>
-                    <td style={{ padding: "10px 14px", color: "#4ade80" }}>${parseFloat(b.revenue || "0").toFixed(2)}</td>
-                    <td style={{ padding: "10px 14px", color: parseFloat(b.net_profit || "0") >= 0 ? "#a78bfa" : "#f87171", fontWeight: 600 }}>${parseFloat(b.net_profit || "0").toFixed(2)}</td>
-                    <td style={{ padding: "10px 14px", color: "#fb923c" }}>{b.imc_take ? `$${parseFloat(b.imc_take).toFixed(2)}` : "—"}</td>
-                    <td style={{ padding: "10px 14px", color: "#4ade80" }}>{b.valley_take ? `$${parseFloat(b.valley_take).toFixed(2)}` : "—"}</td>
-                    <td style={{ padding: "10px 14px" }}>
-                      {b.boba_submitted ? (
-                        <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Submitted</span>
-                      ) : (
-                        <button onClick={() => setBobaFormBreak(b)} style={{ fontSize: 11, background: "#fb923c22", border: "1px solid #fb923c", color: "#fb923c", borderRadius: 5, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>
-                          Submit to BOBA
-                        </button>
-                      )}
-                    </td>
-                    <td style={{ padding: "10px 14px" }}>
-  <a href={`/breaks/${b.id}`} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 5, padding: "4px 10px", cursor: "pointer", textDecoration: "none" }}>View</a>
-</td>
-                    <td style={{ padding: "10px 14px" }}>
-                      {confirmId === b.id ? (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => deleteBreak(b.id)} disabled={deletingId === b.id} style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>
-                            {deletingId === b.id ? "Deleting..." : "Confirm"}
-                          </button>
-                          <button onClick={() => setConfirmId(null)} style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Cancel</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setConfirmId(b.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "4px 8px", cursor: "pointer" }}>Delete</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {breaks.map(b => (
+              <div key={b.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 16 }}>
+                {/* Top row: date + box + boba status */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#e5e5e5" }}>{b.box_name || "—"}</div>
+                    <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{b.date} · {b.num_boxes || 0} boxes · {b.spots_sold} spots</div>
+                  </div>
+                  {b.boba_submitted ? (
+                    <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ BOBA</span>
+                  ) : (
+                    <button onClick={() => setBobaFormBreak(b)} style={{ fontSize: 11, background: "#fb923c22", border: "1px solid #fb923c", color: "#fb923c", borderRadius: 5, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>
+                      Submit BOBA
+                    </button>
+                  )}
+                </div>
+
+                {/* Stats row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 }}>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Revenue</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80" }}>${parseFloat(b.revenue || "0").toFixed(2)}</div>
+                  </div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Profit</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: parseFloat(b.net_profit || "0") >= 0 ? "#a78bfa" : "#f87171" }}>${parseFloat(b.net_profit || "0").toFixed(2)}</div>
+                  </div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>BOBA</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#fb923c" }}>{b.imc_take ? `$${parseFloat(b.imc_take).toFixed(2)}` : "—"}</div>
+                  </div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Valley</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80" }}>{b.valley_take ? `$${parseFloat(b.valley_take).toFixed(2)}` : "—"}</div>
+                  </div>
+                </div>
+
+                {/* Actions row */}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <a href={`/breaks/${b.id}`} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 12px", textDecoration: "none" }}>View</a>
+                  {confirmId === b.id ? (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => deleteBreak(b.id)} disabled={deletingId === b.id} style={{ fontSize: 12, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>
+                        {deletingId === b.id ? "Deleting..." : "Confirm"}
+                      </button>
+                      <button onClick={() => setConfirmId(null)} style={{ fontSize: 12, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmId(b.id)} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#555", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>Delete</button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -513,12 +511,16 @@ export default function Breaks() {
   // NEW BREAK FORM
   return (
     <div style={s.shell}>
+      <style>{mobileStyles}</style>
       <div style={s.content}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, paddingTop: 24 }}>Log new break</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Log new break</h1>
+          <button onClick={() => setView("list")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
+        </div>
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Break details</div>
-          <div style={s.row}>
+          <div className="breaks-grid-2">
             <div><label style={s.label}>Date of break</label><input style={s.input} type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
             <div><label style={s.label}>Box product name</label><input style={s.input} type="text" placeholder="e.g. Griffey Break" value={boxName} onChange={e => setBoxName(e.target.value)} /></div>
           </div>
@@ -527,18 +529,18 @@ export default function Breaks() {
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Box breakdown</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+          <div className="breaks-grid-4">
             {BOX_TYPES.map(bt => (
               <div key={bt.key}>
                 <label style={s.label}>{bt.label}</label>
                 <input style={s.input} type="number" min={0} value={boxCounts[bt.key] || 0} onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))} />
-                {marketPrices[bt.settingsKey] > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Market: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}</div>}
+                {marketPrices[bt.settingsKey] > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Mkt: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}</div>}
               </div>
             ))}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="breaks-stat-2">
             <div style={s.stat}><div style={s.statLabel}>Total boxes</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div></div>
-            <div style={s.stat}><div style={s.statLabel}>Total market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
+            <div style={s.stat}><div style={s.statLabel}>Market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
           </div>
         </div>
 
@@ -557,16 +559,14 @@ export default function Breaks() {
               const availableQty = item.quantity - (pickedCards[key]?.qty || 0);
               return (
                 <div key={i} onClick={() => pickCard(item)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616", cursor: availableQty > 0 ? "pointer" : "not-allowed", background: isPicked ? "#a78bfa11" : "transparent", opacity: availableQty <= 0 ? 0.4 : 1 }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{item.subset}</span>
-                    <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{item.card_number}</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa", flexShrink: 0 }}>{item.subset}</span>
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{item.hero}</span>
                     <span style={{ color: "#a78bfa", fontSize: 12 }}>{item.athlete}</span>
                     {item.weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
-                    {item.variation && <span style={{ color: "#777", fontSize: 11 }}>{item.variation}</span>}
                     {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)}</span>}
                   </div>
-                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#555", whiteSpace: "nowrap", marginLeft: 8 }}>{availableQty > 0 ? `${availableQty} avail` : "Out of stock"}</span>
+                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#555", whiteSpace: "nowrap", marginLeft: 8, flexShrink: 0 }}>{availableQty > 0 ? `${availableQty} avail` : "Out"}</span>
                 </div>
               );
             })}
@@ -576,13 +576,12 @@ export default function Breaks() {
               <div style={{ padding: "8px 14px", background: "#0f0f0f", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px" }}>Selected for this break</div>
               {Object.entries(pickedCards).map(([key, { item, qty }]) => (
                 <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616" }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{item.subset}</span>
                     <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{item.hero}</span>
-                    <span style={{ color: "#a78bfa", fontSize: 12 }}>{item.athlete}</span>
                     {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)} ea</span>}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                     <button onClick={() => updateCardQty(key, qty - 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
                     <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
                     <button onClick={() => updateCardQty(key, qty + 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
@@ -595,25 +594,25 @@ export default function Breaks() {
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Upload Whatnot CSV</div>
-          <label style={{ display: "block", border: "1px dashed #333", borderRadius: 8, padding: 28, textAlign: "center", cursor: "pointer", background: "#0f0f0f" }}>
+          <label style={{ display: "block", border: "1px dashed #333", borderRadius: 8, padding: 24, textAlign: "center", cursor: "pointer", background: "#0f0f0f" }}>
             <input type="file" accept=".csv" onChange={handleCSV} style={{ display: "none" }} />
-            <div style={{ fontSize: 13, color: csvName ? "#4ade80" : "#888", marginBottom: 4 }}>{csvName || "Drop your Whatnot CSV here or click to browse"}</div>
-            <div style={{ fontSize: 11, color: "#444" }}>{csvData.length > 0 ? `${csvData.length} orders detected` : "Exported from Whatnot → Sales → Download CSV"}</div>
+            <div style={{ fontSize: 13, color: csvName ? "#4ade80" : "#888", marginBottom: 4 }}>{csvName || "Tap to upload Whatnot CSV"}</div>
+            <div style={{ fontSize: 11, color: "#444" }}>{csvData.length > 0 ? `${csvData.length} orders detected` : "Whatnot → Sales → Download CSV"}</div>
           </label>
           {csvData.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 10 }}>Revenue breakdown</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 10 }}>
-                <div style={s.stat}><div style={s.statLabel}>Before coupons</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>${revenueBeforeCoupons.toFixed(2)}</div></div>
-                <div style={s.stat}><div style={s.statLabel}>Coupon spend</div><div style={{ ...s.statValue, color: "#f87171" }}>-${couponTotal.toFixed(2)}</div></div>
-                <div style={s.stat}><div style={s.statLabel}>Whatnot fees (11.2%)</div><div style={{ ...s.statValue, color: "#f87171" }}>-${whatnotFees.toFixed(2)}</div></div>
-                <div style={s.stat}><div style={s.statLabel}>After fees</div><div style={{ ...s.statValue, color: "#4ade80" }}>${revenueAfterFees.toFixed(2)}</div></div>
+              <div className="breaks-grid-4" style={{ marginBottom: 10 }}>
+                <div style={s.stat}><div style={s.statLabel}>Before coupons</div><div style={{ ...s.statValue, color: "#e5e5e5", fontSize: 16 }}>${revenueBeforeCoupons.toFixed(2)}</div></div>
+                <div style={s.stat}><div style={s.statLabel}>Coupon spend</div><div style={{ ...s.statValue, color: "#f87171", fontSize: 16 }}>-${couponTotal.toFixed(2)}</div></div>
+                <div style={s.stat}><div style={s.statLabel}>Fees (11.2%)</div><div style={{ ...s.statValue, color: "#f87171", fontSize: 16 }}>-${whatnotFees.toFixed(2)}</div></div>
+                <div style={s.stat}><div style={s.statLabel}>After fees</div><div style={{ ...s.statValue, color: "#4ade80", fontSize: 16 }}>${revenueAfterFees.toFixed(2)}</div></div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-                <div style={s.stat}><div style={s.statLabel}>Spots sold</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{spotsSold}</div></div>
-                <div style={s.stat}><div style={s.statLabel}>Free giveaways</div><div style={{ ...s.statValue, color: "#fb923c" }}>{freeGiveaways}</div></div>
-                <div style={s.stat}><div style={s.statLabel}>Total orders</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{csvData.length}</div></div>
-                <div style={s.stat}><div style={s.statLabel}>% to market</div><div style={{ ...s.statValue, color: percentToMarket >= 100 ? "#4ade80" : "#fb923c" }}>{marketValue > 0 ? `${percentToMarket.toFixed(1)}%` : "—"}</div></div>
+              <div className="breaks-grid-4b">
+                <div style={s.stat}><div style={s.statLabel}>Spots sold</div><div style={{ ...s.statValue, color: "#e5e5e5", fontSize: 16 }}>{spotsSold}</div></div>
+                <div style={s.stat}><div style={s.statLabel}>Giveaways</div><div style={{ ...s.statValue, color: "#fb923c", fontSize: 16 }}>{freeGiveaways}</div></div>
+                <div style={s.stat}><div style={s.statLabel}>Total orders</div><div style={{ ...s.statValue, color: "#e5e5e5", fontSize: 16 }}>{csvData.length}</div></div>
+                <div style={s.stat}><div style={s.statLabel}>% to market</div><div style={{ ...s.statValue, color: percentToMarket >= 100 ? "#4ade80" : "#fb923c", fontSize: 16 }}>{marketValue > 0 ? `${percentToMarket.toFixed(1)}%` : "—"}</div></div>
               </div>
             </div>
           )}
@@ -623,42 +622,41 @@ export default function Breaks() {
           <div style={s.section}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={s.sectionTitle}>📦 Estimated supplies used</div>
-              {suppliesDeducted && <span style={{ fontSize: 12, color: "#4ade80" }}>✓ Deducted from inventory</span>}
+              {suppliesDeducted && <span style={{ fontSize: 12, color: "#4ade80" }}>✓ Deducted</span>}
             </div>
-            <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Auto-calculated from CSV — edit if needed, then click deduct</p>
+            <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Auto-calculated from CSV — edit if needed</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
               {Object.entries(editedEstimates).map(([name, qty]) => (
-                <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 14px" }}>
-                  <div>
-                    <span style={{ fontSize: 13, color: "#aaa" }}>{name}</span>
-                    {inventoryPrices[name] && <span style={{ fontSize: 10, color: "#555", marginLeft: 6 }}>${(inventoryPrices[name] * qty).toFixed(2)}</span>}
+                <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                    {inventoryPrices[name] && <div style={{ fontSize: 10, color: "#555" }}>${(inventoryPrices[name] * qty).toFixed(2)}</div>}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, marginLeft: 8 }}>
                     <button onClick={() => setEditedEstimates(prev => ({ ...prev, [name]: Math.max(0, prev[name] - 1) }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>−</button>
-                    <input type="number" min={0} value={qty} onChange={e => setEditedEstimates(prev => ({ ...prev, [name]: parseInt(e.target.value) || 0 }))} style={{ ...s.smallInput, width: 55 }} />
+                    <input type="number" min={0} value={qty} onChange={e => setEditedEstimates(prev => ({ ...prev, [name]: parseInt(e.target.value) || 0 }))} style={{ ...s.smallInput, width: 44 }} />
                     <button onClick={() => setEditedEstimates(prev => ({ ...prev, [name]: prev[name] + 1 }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>+</button>
                   </div>
                 </div>
               ))}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: `1px solid ${!magPros ? "#7c3aed" : "#1e1e1e"}`, borderRadius: 8, padding: "10px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: `1px solid ${!magPros ? "#7c3aed" : "#1e1e1e"}`, borderRadius: 8, padding: "10px 12px" }}>
                 <div>
-                  <span style={{ fontSize: 13, color: "#aaa" }}>MagPros</span>
-                  <span style={{ fontSize: 10, color: "#7c3aed", marginLeft: 6 }}>required</span>
-                  {magPros && inventoryPrices["MagPros"] && <span style={{ fontSize: 10, color: "#555", marginLeft: 6 }}>${(inventoryPrices["MagPros"] * parseInt(magPros)).toFixed(2)}</span>}
+                  <div style={{ fontSize: 12, color: "#aaa" }}>MagPros</div>
+                  <div style={{ fontSize: 10, color: "#7c3aed" }}>required</div>
                 </div>
-                <input type="number" min={0} placeholder="?" value={magPros} onChange={e => setMagPros(e.target.value)} style={{ ...s.smallInput, border: !magPros ? "1px solid #7c3aed" : "1px solid #222" }} />
+                <input type="number" min={0} placeholder="?" value={magPros} onChange={e => setMagPros(e.target.value)} style={{ ...s.smallInput, width: 55, border: !magPros ? "1px solid #7c3aed" : "1px solid #222" }} />
               </div>
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>Add extra supply</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <select id="extraSupplyName" style={{ ...s.input, flex: 1 }} defaultValue="">
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <select id="extraSupplyName" style={{ ...s.input, flex: 1, minWidth: 140 }} defaultValue="">
                   <option value="" disabled>Select supply...</option>
                   {["Armalopes","Toploaders","Penny sleeves","Giveaway cards","Team bags","Bubble mailers","Stickers","Boxes (S)","Boxes (M)","Boxes (L)","MagPros","Shipping labels","Packing tape","Packing paper"].map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
-                <input id="extraSupplyQty" type="number" min={1} defaultValue={1} style={{ ...s.smallInput, width: 70 }} />
+                <input id="extraSupplyQty" type="number" min={1} defaultValue={1} style={{ ...s.smallInput, width: 60 }} />
                 <button onClick={() => {
                   const nameEl = document.getElementById("extraSupplyName") as HTMLSelectElement;
                   const qtyEl = document.getElementById("extraSupplyQty") as HTMLInputElement;
@@ -666,13 +664,13 @@ export default function Breaks() {
                   if (!name) return;
                   setEditedEstimates(prev => ({ ...prev, [name]: (prev[name] || 0) + qty }));
                   nameEl.value = ""; qtyEl.value = "1";
-                }} style={{ background: "#a78bfa22", border: "1px solid #a78bfa", color: "#a78bfa", borderRadius: 8, padding: "0 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                }} style={{ background: "#a78bfa22", border: "1px solid #a78bfa", color: "#a78bfa", borderRadius: 8, padding: "0 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
                   + Add
                 </button>
               </div>
             </div>
             <button onClick={deductSuppliesFromInventory} disabled={deductingSupplies || suppliesDeducted || !magPros} style={{ width: "100%", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, cursor: suppliesDeducted || !magPros ? "not-allowed" : "pointer", marginTop: 4, background: suppliesDeducted ? "#1a3a1a" : "linear-gradient(135deg,#166534,#15803d)", color: suppliesDeducted ? "#4ade80" : "#fff" }}>
-              {deductingSupplies ? "Deducting..." : suppliesDeducted ? "✓ Supplies deducted from inventory" : "Deduct supplies from inventory"}
+              {deductingSupplies ? "Deducting..." : suppliesDeducted ? "✓ Supplies deducted" : "Deduct supplies from inventory"}
             </button>
           </div>
         )}
@@ -683,24 +681,24 @@ export default function Breaks() {
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Revenue</div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>After Whatnot fees</span><span style={{ color: "#4ade80", fontWeight: 600 }}>${revenueAfterFees.toFixed(2)}</span></div>
-              {marketValue > 0 && <div style={s.expenseRow}><span style={{ color: "#777" }}>% to market value</span><span style={{ color: percentToMarket >= 100 ? "#4ade80" : "#fb923c", fontWeight: 600 }}>{percentToMarket.toFixed(1)}% of ${marketValue.toFixed(2)}</span></div>}
+              {marketValue > 0 && <div style={s.expenseRow}><span style={{ color: "#777" }}>% to market</span><span style={{ color: percentToMarket >= 100 ? "#4ade80" : "#fb923c", fontWeight: 600 }}>{percentToMarket.toFixed(1)}%</span></div>}
             </div>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Shared expenses (IMC 70% / Valley 30%)</div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Shipping supplies (incl. MagPros)</span><span style={{ color: "#f87171" }}>-${imcSupplyCost.toFixed(2)}</span></div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Chaser card costs</span><span style={{ color: "#f87171" }}>-${chaserCost.toFixed(2)}</span></div>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Shared expenses (70/30)</div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>Shipping supplies</span><span style={{ color: "#f87171" }}>-${imcSupplyCost.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>Chaser costs</span><span style={{ color: "#f87171" }}>-${chaserCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Coupon spend</span><span style={{ color: "#f87171" }}>-${couponTotal.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Promotion total</span><span style={{ color: "#f87171" }}>-${parseFloat(promotionTotal || "0").toFixed(2)}</span></div>
               <div style={{ ...s.expenseRow, marginTop: 4 }}><span style={{ color: "#aaa", fontWeight: 600 }}>Total shared</span><span style={{ color: "#fb923c", fontWeight: 600 }}>${sharedExpenses.toFixed(2)}</span></div>
-              <div style={s.expenseRow}><span style={{ color: "#555", fontSize: 12 }}>↳ IMC pays (70%)</span><span style={{ color: "#fb923c", fontSize: 12 }}>-${imcShareOfExpenses.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#555", fontSize: 12 }}>↳ BOBA pays (70%)</span><span style={{ color: "#fb923c", fontSize: 12 }}>-${imcShareOfExpenses.toFixed(2)}</span></div>
               <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#555", fontSize: 12 }}>↳ Valley pays (30%)</span><span style={{ color: "#f87171", fontSize: 12 }}>-${valleyShareOfExpenses.toFixed(2)}</span></div>
             </div>
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Valley only expenses</div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Valley supplies (stickers etc)</span><span style={{ color: "#f87171" }}>-${valleySupplyCost.toFixed(2)}</span></div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Insurance card costs</span><span style={{ color: "#f87171" }}>-${insuranceCost.toFixed(2)}</span></div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>First Timer card costs</span><span style={{ color: "#f87171" }}>-${firstTimerCost.toFixed(2)}</span></div>
-              <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#777" }}>Giveaway card costs</span><span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>Valley supplies</span><span style={{ color: "#f87171" }}>-${valleySupplyCost.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>Insurance cards</span><span style={{ color: "#f87171" }}>-${insuranceCost.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>First Timer cards</span><span style={{ color: "#f87171" }}>-${firstTimerCost.toFixed(2)}</span></div>
+              <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#777" }}>Giveaway cards</span><span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span></div>
             </div>
             <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 16, marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -711,16 +709,16 @@ export default function Breaks() {
             <div style={{ fontSize: 11, color: "#555", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>IMC split (70/30)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ background: "#0f0f0f", border: "1px solid #fb923c33", borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏆 BOBA take (70%)</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: "#fb923c" }}>${imcTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Expenses paid: -${imcShareOfExpenses.toFixed(2)}</div>
-                <div style={{ fontSize: 12, color: "#fb923c", marginTop: 6, fontWeight: 600 }}>Net to BOBA: ${(imcTake - imcShareOfExpenses).toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏆 BOBA (70%)</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#fb923c" }}>${imcTake.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Expenses: -${imcShareOfExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 12, color: "#fb923c", marginTop: 6, fontWeight: 600 }}>Net: ${(imcTake - imcShareOfExpenses).toFixed(2)}</div>
               </div>
               <div style={{ background: "#0f0f0f", border: "1px solid #4ade8033", borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏠 Valley take (30%)</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: "#4ade80" }}>${valleyTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Shared: -${valleyShareOfExpenses.toFixed(2)} | Only: -${valleyOnlyExpenses.toFixed(2)}</div>
-                <div style={{ fontSize: 12, color: "#4ade80", marginTop: 6, fontWeight: 600 }}>Net to Valley: ${(valleyTake - valleyShareOfExpenses - valleyOnlyExpenses).toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏠 Valley (30%)</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>${valleyTake.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Shared: -${valleyShareOfExpenses.toFixed(2)}</div>
+                <div style={{ fontSize: 12, color: "#4ade80", marginTop: 6, fontWeight: 600 }}>Net: ${(valleyTake - valleyShareOfExpenses - valleyOnlyExpenses).toFixed(2)}</div>
               </div>
             </div>
           </div>
