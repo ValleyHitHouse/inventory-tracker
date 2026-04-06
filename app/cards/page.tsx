@@ -84,9 +84,6 @@ export default function Cards() {
     return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
   });
 
-  const inputStyle = { background: "#111", border: "1px solid #222", borderRadius: 8, padding: "9px 14px", fontSize: 13, color: "#e5e5e5", outline: "none", width: "100%", boxSizing: "border-box" as const };
-  const selectStyle = { background: "#111", border: "1px solid #222", borderRadius: 8, padding: "9px 14px", fontSize: 13, color: "#e5e5e5", outline: "none", cursor: "pointer", width: "100%", boxSizing: "border-box" as const };
-
   function SortTh({ col, label }: { col: string; label: string }) {
     const active = sortCol === col;
     return (
@@ -103,21 +100,35 @@ export default function Cards() {
   }
 
   const mobileStyles = `
-    .cards-filters { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-    .cards-filter-selects { display: flex; gap: 12px; flex: 1; }
     .cards-table-wrap { display: block; }
     .cards-mobile-list { display: none; }
+    .cards-filter-row { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .cards-selects { display: flex; gap: 12px; }
     @media (max-width: 768px) {
-      .cards-filter-selects { flex-direction: column; }
       .cards-table-wrap { display: none; }
       .cards-mobile-list { display: flex; flex-direction: column; gap: 8px; }
+      .cards-filter-row { flex-direction: column; gap: 8px; }
+      .cards-selects { flex-direction: row; gap: 8px; }
+      .cards-selects select { flex: 1; }
     }
   `;
 
+  const inputStyle: React.CSSProperties = {
+    background: "#111", border: "1px solid #222", borderRadius: 8,
+    padding: "9px 14px", fontSize: 13, color: "#e5e5e5", outline: "none",
+    width: "100%", boxSizing: "border-box",
+  };
+
+  const selectStyle: React.CSSProperties = {
+    background: "#111", border: "1px solid #222", borderRadius: 8,
+    padding: "9px 14px", fontSize: 13, color: "#e5e5e5", outline: "none",
+    cursor: "pointer", boxSizing: "border-box",
+  };
+
   return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", width: "100%", boxSizing: "border-box" }}>
       <style>{mobileStyles}</style>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px", width: "100%", boxSizing: "border-box" }}>
 
         {/* Header */}
         <div style={{ marginBottom: 20 }}>
@@ -127,11 +138,12 @@ export default function Cards() {
           </p>
         </div>
 
-        {/* Set switcher */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {/* Set switcher — always 3 equal columns */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 20, width: "100%" }}>
           {SETS.map((set, i) => (
             <button key={i} onClick={() => setActiveSet(i)} style={{
-              padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+              padding: "8px 4px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+              cursor: "pointer", width: "100%",
               border: `1px solid ${activeSet === i ? set.color : "#222"}`,
               background: activeSet === i ? set.color + "22" : "#111",
               color: activeSet === i ? set.color : "#555",
@@ -142,14 +154,14 @@ export default function Cards() {
         </div>
 
         {/* Filters */}
-        <div className="cards-filters">
+        <div className="cards-filter-row">
           <input
-            style={{ ...inputStyle, flex: 2, minWidth: 200 }}
+            style={{ ...inputStyle, flex: 1 }}
             placeholder="🔍 Search by hero, athlete, card #, variation..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <div className="cards-filter-selects">
+          <div className="cards-selects">
             <select style={selectStyle} value={filterSet} onChange={e => setFilterSet(e.target.value)}>
               {treatments.map(t => <option key={t} value={t}>{t === "All" ? "All sets" : t}</option>)}
             </select>
@@ -182,19 +194,19 @@ export default function Cards() {
                     <tbody>
                       {sorted.slice(0, 500).map((c: any, i: number) => (
                         <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
-                          <td style={{ padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616", color: "#555", fontFamily: "monospace" }}>{c["Card #"]}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616", color: "#e5e5e5", fontWeight: 600 }}>{c.Hero}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616", color: activeColor }}>{c["Athlete Inspiration"]}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616", color: "#777" }}>{c.Variation}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616", color: "#555", fontSize: 12 as any }}>{c.Treatment}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616" }}>
+                          <td style={{ padding: "11px 14px", fontSize: 13, color: "#555", fontFamily: "monospace" }}>{c["Card #"]}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 13, color: "#e5e5e5", fontWeight: 600 }}>{c.Hero}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 13, color: activeColor }}>{c["Athlete Inspiration"]}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 13, color: "#777" }}>{c.Variation}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 12, color: "#555" }}>{c.Treatment}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 13 }}>
                             {c.Weapon && (
                               <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: (weaponColors[c.Weapon] || "#333") + "22", color: weaponColors[c.Weapon] || "#aaa" }}>
                                 {c.Weapon}
                               </span>
                             )}
                           </td>
-                          <td style={{ padding: "11px 14px", fontSize: 13, borderBottom: "1px solid #161616", color: "#4ade80", fontWeight: 600 }}>{c.Power}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 13, color: "#4ade80", fontWeight: 600 }}>{c.Power}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -211,15 +223,15 @@ export default function Cards() {
             {/* Mobile card list */}
             <div className="cards-mobile-list">
               {sorted.slice(0, 500).map((c: any, i: number) => (
-                <div key={i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 14px" }}>
+                <div key={i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 14px", width: "100%", boxSizing: "border-box" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: "#e5e5e5" }}>{c.Hero}</div>
                       <div style={{ fontSize: 13, color: activeColor, marginTop: 2 }}>{c["Athlete Inspiration"]}</div>
                     </div>
-                    <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <div style={{ fontSize: 11, color: "#555", fontFamily: "monospace" }}>{c["Card #"]}</div>
-                      {c.Power && <div style={{ fontSize: 13, fontWeight: 700, color: "#4ade80", marginTop: 2 }}>⚡{c.Power}</div>}
+                      {c.Power && <div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80", marginTop: 2 }}>⚡{c.Power}</div>}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -228,7 +240,11 @@ export default function Cards() {
                         {c.Weapon}
                       </span>
                     )}
-                    {c.Treatment && <span style={{ fontSize: 11, color: "#555", padding: "2px 8px", borderRadius: 20, background: "#1a1a1a" }}>{c.Treatment}</span>}
+                    {c.Treatment && (
+                      <span style={{ fontSize: 11, color: "#555", padding: "2px 8px", borderRadius: 20, background: "#1a1a1a" }}>
+                        {c.Treatment}
+                      </span>
+                    )}
                     {c.Variation && <span style={{ fontSize: 11, color: "#777" }}>{c.Variation}</span>}
                   </div>
                 </div>

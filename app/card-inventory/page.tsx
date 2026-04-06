@@ -167,21 +167,25 @@ export default function CardInventoryPage() {
   }, {} as Record<string, any[]>);
 
   const s = {
-    shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" },
+    shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", width: "100%", boxSizing: "border-box" as const },
+    content: { maxWidth: 1100, margin: "0 auto", padding: "24px 16px", width: "100%", boxSizing: "border-box" as const },
     section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
     input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box" as const },
-    smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "#e5e5e5", outline: "none", width: 90 },
+    smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "#e5e5e5", outline: "none", width: 70 as const },
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
   };
 
   const mobileStyles = `
-    .ci-stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
+    .ci-stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; width: 100%; }
     .ci-edit-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
     .ci-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .ci-giveaway-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 768px) {
-      .ci-stats-grid { grid-template-columns: repeat(2,1fr); }
+      .ci-stats-grid { grid-template-columns: repeat(4,1fr); gap: 6px; }
+      .ci-stats-grid > div { padding: 10px 8px !important; }
+      .ci-stats-grid .stat-number { font-size: 20px !important; }
+      .ci-stats-grid .stat-label { font-size: 9px !important; }
       .ci-edit-grid { grid-template-columns: 1fr 1fr; }
       .ci-edit-fields { grid-template-columns: 1fr 1fr; }
       .ci-giveaway-grid { grid-template-columns: 1fr; }
@@ -192,7 +196,7 @@ export default function CardInventoryPage() {
   if (editingCard) return (
     <div style={s.shell}>
       <style>{mobileStyles}</style>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
+      <div style={s.content}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Edit card</h1>
@@ -238,7 +242,7 @@ export default function CardInventoryPage() {
   if (view === "add") return (
     <div style={s.shell}>
       <style>{mobileStyles}</style>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
+      <div style={s.content}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Add cards manually</h1>
@@ -312,7 +316,7 @@ export default function CardInventoryPage() {
                     <input type="number" min={0} step="0.01" placeholder="0.00" value={pricePaid}
                       onClick={e => e.stopPropagation()}
                       onChange={e => { e.stopPropagation(); updatePrice(key, e.target.value); }}
-                      style={{ ...s.smallInput, width: 70 }} />
+                      style={s.smallInput} />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <button onClick={e => { e.stopPropagation(); updateQty(key, qty - 1); }} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
@@ -336,7 +340,7 @@ export default function CardInventoryPage() {
   return (
     <div style={s.shell}>
       <style>{mobileStyles}</style>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
+      <div style={s.content}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Card Inventory</h1>
@@ -345,24 +349,29 @@ export default function CardInventoryPage() {
           <button onClick={() => setView("add")} style={s.submitBtn}>+ Add cards</button>
         </div>
 
-        {/* Stats */}
+        {/* Stats — always 4 columns, smaller on mobile */}
         <div className="ci-stats-grid">
-          <div style={{ ...s.section, padding: "16px 20px", marginBottom: 0 }}>
-            <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Giveaway</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: "#4ade80" }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px 20px" }}>
+            <div className="stat-label" style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Giveaway</div>
+            <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: "#4ade80" }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
           </div>
           {SUBSETS.map(sub => (
-            <div key={sub} style={{ ...s.section, padding: "16px 20px", marginBottom: 0 }}>
-              <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>{sub}</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "#a78bfa" }}>
+            <div key={sub} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px 20px" }}>
+              <div className="stat-label" style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>{sub}</div>
+              <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: "#a78bfa" }}>
                 {loading ? "—" : inventory.filter(i => i.subset === sub && i.quantity > 0).reduce((sum, i) => sum + i.quantity, 0)}
               </div>
             </div>
           ))}
         </div>
 
-        <div style={{ marginBottom: 20, marginTop: 16 }}>
-          <input style={s.input} placeholder="🔍 Search by hero, athlete, card #, treatment, weapon, set..." value={inventorySearch} onChange={e => setInventorySearch(e.target.value)} />
+        <div style={{ marginBottom: 20 }}>
+          <input
+            style={s.input}
+            placeholder="🔍 Search by hero, athlete, card #, treatment, weapon, set..."
+            value={inventorySearch}
+            onChange={e => setInventorySearch(e.target.value)}
+          />
         </div>
 
         {loading ? <p style={{ color: "#555" }}>Loading...</p> : SUBSETS.map(sub => (
@@ -374,20 +383,20 @@ export default function CardInventoryPage() {
               </span>
             </div>
             {!groupedInventory[sub] || groupedInventory[sub].length === 0 ? (
-              <div style={{ ...s.section, textAlign: "center", padding: 24 }}>
+              <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 24, textAlign: "center" }}>
                 <p style={{ color: "#555", fontSize: 13 }}>{inventorySearch ? `No ${sub} match your search` : `No ${sub} in inventory`}</p>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {groupedInventory[sub].map((item: any, i: number) => (
-                  <div key={i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 14px" }}>
+                  <div key={i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 14px", width: "100%", boxSizing: "border-box" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>{item.hero}</div>
                         <div style={{ fontSize: 12, color: "#a78bfa", marginTop: 2 }}>{item.athlete}</div>
                       </div>
-                      <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: "#a78bfa" }}>{item.quantity}</div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: "#a78bfa" }}>{item.quantity}</div>
                         <div style={{ fontSize: 10, color: "#555" }}>in stock</div>
                       </div>
                     </div>
