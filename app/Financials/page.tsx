@@ -299,7 +299,7 @@ Category guide:
           <p style={{ fontSize: 12, color: "#555", marginBottom: 14 }}>Upload a photo and Claude will auto-detect the merchant, amount, date and category</p>
           {!receiptPreview ? (
             <label style={{ display: "block", border: "1px dashed #333", borderRadius: 8, padding: 28, textAlign: "center", cursor: "pointer", background: "#0f0f0f" }}>
-              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleReceiptChange} style={{ display: "none" }} />
+              <input ref={fileInputRef} type="file" accept="image/*"  onChange={handleReceiptChange} style={{ display: "none" }} />
               <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
               <div style={{ fontSize: 14, color: "#888", marginBottom: 4 }}>Tap to take a photo or upload receipt</div>
               <div style={{ fontSize: 11, color: "#444" }}>JPG, PNG, HEIC supported</div>
