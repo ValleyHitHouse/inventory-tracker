@@ -46,6 +46,7 @@ export default function Sidebar() {
       <NavLink href="/card-inventory" emoji="📋" label="Card Inventory" />
       <NavLink href="/lot-comp" emoji="🏷️" label="Lot Comps" />
       <NavLink href="/analytics" emoji="📊" label="Analytics" />
+      <NavLink href="/financials" emoji="🧾" label="Financials" />
       <NavLink href="/settings" emoji="⚙️" label="Settings" />
       <NavLink href="/orders" emoji="📋" label="Orders" soon />
       <NavLink href="/sales" emoji="📈" label="Sales" soon />
@@ -54,7 +55,6 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Hamburger — mobile only, shown via CSS */}
       <button
         onClick={() => setMobileOpen(true)}
         className="vhh-hamburger"
@@ -68,7 +68,6 @@ export default function Sidebar() {
         }}
       >☰</button>
 
-      {/* Dark overlay behind sidebar on mobile */}
       <div
         onClick={() => setMobileOpen(false)}
         className={`vhh-overlay${mobileOpen ? " vhh-overlay-open" : ""}`}
@@ -80,7 +79,6 @@ export default function Sidebar() {
         }}
       />
 
-      {/* Sidebar panel */}
       <div
         className={`vhh-sidebar${mobileOpen ? " vhh-sidebar-open" : ""}`}
         style={{
