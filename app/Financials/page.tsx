@@ -3,8 +3,8 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 const TAX_CATEGORIES = [
-  { value: "cogs", label: "Cost of Goods Sold", emoji: "📦", description: "Cards, lot comps, inventory purchases", color: "#f87171" },
-  { value: "shipping", label: "Shipping & Postage", emoji: "🚚", description: "Postage, shipping labels, carriers", color: "#fb923c" },
+  { value: "cogs", label: "Cost of Goods Sold", emoji: "📦", description: "Cards, lot comps, inventory", color: "#f87171" },
+  { value: "shipping", label: "Shipping & Postage", emoji: "🚚", description: "Postage, labels, carriers", color: "#fb923c" },
   { value: "platform_fees", label: "Platform Fees", emoji: "💻", description: "Whatnot fees, marketplace fees", color: "#fbbf24" },
   { value: "software", label: "Software & Subscriptions", emoji: "📱", description: "Apps, tools, subscriptions", color: "#a78bfa" },
   { value: "vehicle", label: "Vehicle & Gas", emoji: "⛽", description: "Gas, mileage, vehicle expenses", color: "#38bdf8" },
@@ -20,6 +20,7 @@ const TAX_CATEGORIES = [
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 3 }, (_, i) => CURRENT_YEAR - i);
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function FinancialsPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -28,7 +29,6 @@ export default function FinancialsPage() {
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
   const [view, setView] = useState<"overview" | "expenses" | "add">("overview");
 
-  // Add expense form
   const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0]);
   const [expDescription, setExpDescription] = useState("");
   const [expAmount, setExpAmount] = useState("");
@@ -39,7 +39,7 @@ export default function FinancialsPage() {
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanResult, setScanResult] = useState<boolean>(false);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
@@ -48,9 +48,7 @@ export default function FinancialsPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     setLoading(true);
@@ -67,7 +65,7 @@ export default function FinancialsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptFile(file);
-    setScanResult(null);
+    setScanResult(false);
     const reader = new FileReader();
     reader.onload = ev => setReceiptPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
@@ -78,13 +76,13 @@ export default function FinancialsPage() {
     setScanning(true);
     try {
       const base64 = receiptPreview.split(",")[1];
-      const mediaType = receiptFile.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+      const mediaType = receiptFile.type || "image/jpeg";
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 1000,
           messages: [{
             role: "user",
@@ -129,9 +127,8 @@ Category guide:
       const text = data.content?.[0]?.text || "";
       const clean = text.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(clean);
-      setScanResult(parsed);
+      setScanResult(true);
 
-      // Auto-fill form fields
       if (parsed.merchant) setExpMerchant(parsed.merchant);
       if (parsed.date) setExpDate(parsed.date);
       if (parsed.amount) setExpAmount(String(parsed.amount));
@@ -177,7 +174,7 @@ Category guide:
     setExpDate(new Date().toISOString().split("T")[0]);
     setExpDescription(""); setExpAmount(""); setExpCategory("supplies");
     setExpMerchant(""); setExpNotes(""); setReceiptFile(null);
-    setReceiptPreview(null); setScanResult(null);
+    setReceiptPreview(null); setScanResult(false);
   }
 
   async function deleteExpense(id: number) {
@@ -206,7 +203,6 @@ Category guide:
 
   const grossRevenue = yearBreaks.reduce((s, b) => s + parseFloat(b.revenue || "0"), 0);
   const whatnotFees = grossRevenue * 0.112;
-  const netRevenue = grossRevenue - whatnotFees;
   const valleyIncome = yearBreaks.reduce((s, b) => s + parseFloat(b.valley_take || "0"), 0);
   const bobaPayouts = yearBreaks.reduce((s, b) => s + parseFloat(b.imc_take || "0"), 0);
   const breakSupplies = yearBreaks.reduce((s, b) => s + parseFloat(b.total_supply_cost || "0"), 0);
@@ -215,13 +211,12 @@ Category guide:
   const breakChasers = yearBreaks.reduce((s, b) => s + parseFloat(b.chaser_cost || "0"), 0);
   const manualExpensesTotal = yearExpenses.reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
   const totalDeductible = breakSupplies + breakCoupons + breakPromos + breakChasers + whatnotFees + manualExpensesTotal;
-  const taxableIncome = valleyIncome; // Valley's share is Mitch's income
-  const estimatedSETax = Math.max(0, taxableIncome * 0.9235 * 0.153); // SE tax rate
-  const estimatedIncomeTax = Math.max(0, taxableIncome * 0.22); // Estimated 22% bracket
+  const taxableIncome = valleyIncome;
+  const estimatedSETax = Math.max(0, taxableIncome * 0.9235 * 0.153);
+  const estimatedIncomeTax = Math.max(0, taxableIncome * 0.22);
   const totalEstimatedTax = estimatedSETax + estimatedIncomeTax;
   const setAsidePerBreak = yearBreaks.length > 0 ? totalEstimatedTax / yearBreaks.length : 0;
 
-  // Monthly P&L
   const months = Array.from({ length: 12 }, (_, i) => {
     const month = String(i + 1).padStart(2, "0");
     const key = `${selectedYear}-${month}`;
@@ -239,13 +234,10 @@ Category guide:
     return { key, month: i, revenue, fees, supplies, coupons, promos, chasers, manual, valley, profit, breakCount: mBreaks.length };
   });
 
-  // Category breakdown
   const categoryTotals: Record<string, number> = {};
   for (const e of yearExpenses) {
     categoryTotals[e.category] = (categoryTotals[e.category] || 0) + parseFloat(e.amount || "0");
   }
-
-  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   const s = {
     shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", width: "100%", boxSizing: "border-box" as const },
@@ -259,26 +251,27 @@ Category guide:
   };
 
   const mobileStyles = `
-    .fin-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
     .fin-years { display: flex; gap: 8px; }
     .fin-grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
     .fin-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
     .fin-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-    .fin-pnl-row { display: grid; grid-template-columns: 80px repeat(8, 1fr); gap: 6px; align-items: center; padding: 10px 0; border-bottom: 1px solid #161616; font-size: 12px; }
-    .fin-pnl-header { display: grid; grid-template-columns: 80px repeat(8, 1fr); gap: 6px; padding: 8px 0; border-bottom: 1px solid #1e1e1e; }
+    .fin-pnl-row { display: grid; grid-template-columns: 70px repeat(8,1fr); gap: 6px; align-items: center; padding: 10px 0; border-bottom: 1px solid #161616; font-size: 12px; }
+    .fin-pnl-header { display: grid; grid-template-columns: 70px repeat(8,1fr); gap: 6px; padding: 8px 0; border-bottom: 1px solid #1e1e1e; }
     .fin-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .fin-schedule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 768px) {
       .fin-grid-4 { grid-template-columns: 1fr 1fr; }
       .fin-grid-3 { grid-template-columns: 1fr 1fr; }
       .fin-grid-2 { grid-template-columns: 1fr; }
-      .fin-pnl-row { grid-template-columns: 60px repeat(4,1fr); font-size: 11px; }
-      .fin-pnl-header { grid-template-columns: 60px repeat(4,1fr); }
-      .fin-pnl-col-hide { display: none; }
+      .fin-pnl-row { grid-template-columns: 50px repeat(4,1fr); font-size: 11px; }
+      .fin-pnl-header { grid-template-columns: 50px repeat(4,1fr); }
+      .fin-pnl-hide { display: none; }
       .fin-add-grid { grid-template-columns: 1fr; }
+      .fin-schedule-grid { grid-template-columns: 1fr; }
     }
   `;
 
-  // RECEIPT VIEWER MODAL
+  // RECEIPT VIEWER
   if (viewingReceipt) return (
     <div style={s.shell}>
       <div style={s.content}>
@@ -300,11 +293,10 @@ Category guide:
           <button onClick={() => { setView("expenses"); resetForm(); }} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
 
-        {/* Receipt upload + scan */}
+        {/* Receipt upload */}
         <div style={s.section}>
           <div style={s.sectionTitle}>📸 Receipt (optional)</div>
           <p style={{ fontSize: 12, color: "#555", marginBottom: 14 }}>Upload a photo and Claude will auto-detect the merchant, amount, date and category</p>
-
           {!receiptPreview ? (
             <label style={{ display: "block", border: "1px dashed #333", borderRadius: 8, padding: 28, textAlign: "center", cursor: "pointer", background: "#0f0f0f" }}>
               <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleReceiptChange} style={{ display: "none" }} />
@@ -313,25 +305,22 @@ Category guide:
               <div style={{ fontSize: 11, color: "#444" }}>JPG, PNG, HEIC supported</div>
             </label>
           ) : (
-            <div>
-              <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-                <img src={receiptPreview} alt="Receipt preview" style={{ width: 120, height: 160, objectFit: "cover", borderRadius: 8, border: "1px solid #1e1e1e" }} />
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
-                  <div style={{ fontSize: 13, color: "#aaa" }}>{receiptFile?.name}</div>
-                  {scanResult ? (
-                    <div style={{ background: "#0d1a0d", border: "1px solid #4ade8033", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 6, fontWeight: 600 }}>✓ Receipt scanned — fields auto-filled</div>
-                      <div style={{ fontSize: 12, color: "#555" }}>Review and edit below before saving</div>
-                    </div>
-                  ) : (
-                    <button onClick={scanReceipt} disabled={scanning} style={{ ...s.submitBtn, padding: "10px 20px", fontSize: 13, width: "fit-content" }}>
-                      {scanning ? "🔍 Scanning..." : "✨ Scan with AI"}
-                    </button>
-                  )}
-                  <button onClick={() => { setReceiptFile(null); setReceiptPreview(null); setScanResult(null); }} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#555", borderRadius: 6, padding: "5px 10px", cursor: "pointer", width: "fit-content" }}>
-                    Remove
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <img src={receiptPreview} alt="Receipt preview" style={{ width: 100, height: 140, objectFit: "cover", borderRadius: 8, border: "1px solid #1e1e1e", flexShrink: 0 }} />
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
+                <div style={{ fontSize: 13, color: "#aaa" }}>{receiptFile?.name}</div>
+                {scanResult ? (
+                  <div style={{ background: "#0d1a0d", border: "1px solid #4ade8033", borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Receipt scanned — fields auto-filled below</div>
+                  </div>
+                ) : (
+                  <button onClick={scanReceipt} disabled={scanning} style={{ ...s.submitBtn, padding: "10px 20px", fontSize: 13, width: "fit-content" }}>
+                    {scanning ? "🔍 Scanning..." : "✨ Scan with AI"}
                   </button>
-                </div>
+                )}
+                <button onClick={() => { setReceiptFile(null); setReceiptPreview(null); setScanResult(false); }} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#555", borderRadius: 6, padding: "5px 10px", cursor: "pointer", width: "fit-content" }}>
+                  Remove
+                </button>
               </div>
             </div>
           )}
@@ -363,7 +352,7 @@ Category guide:
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
               {TAX_CATEGORIES.map(cat => (
                 <div key={cat.value} onClick={() => setExpCategory(cat.value)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 8, cursor: "pointer", border: `1px solid ${expCategory === cat.value ? cat.color : "#1e1e1e"}`, background: expCategory === cat.value ? cat.color + "11" : "#0f0f0f" }}>
-                  <span style={{ fontSize: 16 }}>{cat.emoji}</span>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{cat.emoji}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: expCategory === cat.value ? cat.color : "#aaa" }}>{cat.label}</div>
                     <div style={{ fontSize: 10, color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cat.description}</div>
@@ -405,7 +394,7 @@ Category guide:
         {Object.keys(categoryTotals).length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>By category</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {TAX_CATEGORIES.filter(cat => categoryTotals[cat.value] > 0)
                 .sort((a, b) => (categoryTotals[b.value] || 0) - (categoryTotals[a.value] || 0))
                 .map(cat => {
@@ -434,14 +423,14 @@ Category guide:
         <div style={s.section}>
           <div style={s.sectionTitle}>All expenses — {selectedYear}</div>
           {yearExpenses.length === 0 ? (
-            <p style={{ color: "#555", fontSize: 13 }}>No manual expenses for {selectedYear} — click "Add expense" to log one</p>
+            <p style={{ color: "#555", fontSize: 13 }}>No manual expenses for {selectedYear} yet</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {yearExpenses.map((exp, i) => {
+              {yearExpenses.map((exp) => {
                 const cat = TAX_CATEGORIES.find(c => c.value === exp.category);
                 return (
                   <div key={exp.id} style={{ background: "#0f0f0f", borderRadius: 8, padding: "12px 14px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                           <span style={{ fontSize: 14 }}>{cat?.emoji}</span>
@@ -532,7 +521,7 @@ Category guide:
             </div>
           </div>
 
-          {/* Tax breakdown */}
+          {/* Tax estimate */}
           <div style={{ ...s.section, borderColor: "#fbbf2433" }}>
             <div style={s.sectionTitle}>🧮 Tax estimate — {selectedYear}</div>
             <div className="fin-grid-3">
@@ -553,34 +542,32 @@ Category guide:
               </div>
             </div>
             <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 12, fontSize: 12, color: "#555", marginTop: 4 }}>
-              ⚠️ These are estimates only. Consult a tax professional for accurate figures. SE tax rate is 15.3%, income tax bracket assumed at 22%.
+              ⚠️ Estimates only. Consult a tax professional for accurate figures.
             </div>
           </div>
 
-          {/* Deductible expenses breakdown */}
+          {/* Deductible breakdown */}
           <div style={s.section}>
             <div style={s.sectionTitle}>📋 Deductible expenses — {selectedYear}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {[
-                { label: "Whatnot platform fees (11.2%)", amount: whatnotFees, note: "Auto-calculated from revenue" },
-                { label: "Shipping & packaging supplies", amount: breakSupplies, note: "From break logs" },
-                { label: "Coupon spend", amount: breakCoupons, note: "From break logs" },
-                { label: "Promotion spend", amount: breakPromos, note: "From break logs" },
-                { label: "Chaser card costs (COGS)", amount: breakChasers, note: "From break logs" },
-                { label: "Manual expenses", amount: manualExpensesTotal, note: `${yearExpenses.length} logged expenses` },
-              ].map((row, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #161616" }}>
-                  <div>
-                    <div style={{ fontSize: 13, color: "#aaa" }}>{row.label}</div>
-                    <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>{row.note}</div>
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#f87171" }}>-${row.amount.toFixed(2)}</div>
+            {[
+              { label: "Whatnot platform fees (11.2%)", amount: whatnotFees, note: "Auto-calculated from revenue" },
+              { label: "Shipping & packaging supplies", amount: breakSupplies, note: "From break logs" },
+              { label: "Coupon spend", amount: breakCoupons, note: "From break logs" },
+              { label: "Promotion spend", amount: breakPromos, note: "From break logs" },
+              { label: "Chaser card costs (COGS)", amount: breakChasers, note: "From break logs" },
+              { label: "Manual expenses", amount: manualExpensesTotal, note: `${yearExpenses.length} logged expenses` },
+            ].map((row, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #161616" }}>
+                <div>
+                  <div style={{ fontSize: 13, color: "#aaa" }}>{row.label}</div>
+                  <div style={{ fontSize: 11, color: "#444", marginTop: 2 }}>{row.note}</div>
                 </div>
-              ))}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>Total deductible expenses</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: "#f87171" }}>-${totalDeductible.toFixed(2)}</span>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#f87171" }}>-${row.amount.toFixed(2)}</div>
               </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>Total deductible</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: "#f87171" }}>-${totalDeductible.toFixed(2)}</span>
             </div>
           </div>
 
@@ -588,42 +575,43 @@ Category guide:
           <div style={s.section}>
             <div style={s.sectionTitle}>📅 Monthly P&L — {selectedYear}</div>
             <div style={{ overflowX: "auto" }}>
-              <div style={{ minWidth: 600 }}>
+              <div style={{ minWidth: 500 }}>
                 <div className="fin-pnl-header">
-                  <div style={{ fontSize: 10, color: "#444", fontWeight: 600, textTransform: "uppercase" }}>Month</div>
-                  <div style={{ fontSize: 10, color: "#444", fontWeight: 600, textTransform: "uppercase" }}>Breaks</div>
-                  <div style={{ fontSize: 10, color: "#4ade80", fontWeight: 600, textTransform: "uppercase" }}>Revenue</div>
-                  <div className="fin-pnl-col-hide" style={{ fontSize: 10, color: "#f87171", fontWeight: 600, textTransform: "uppercase" }}>Fees</div>
-                  <div className="fin-pnl-col-hide" style={{ fontSize: 10, color: "#f87171", fontWeight: 600, textTransform: "uppercase" }}>Supplies</div>
-                  <div className="fin-pnl-col-hide" style={{ fontSize: 10, color: "#f87171", fontWeight: 600, textTransform: "uppercase" }}>Other exp.</div>
-                  <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 600, textTransform: "uppercase" }}>Net profit</div>
-                  <div style={{ fontSize: 10, color: "#38bdf8", fontWeight: 600, textTransform: "uppercase" }}>Valley</div>
-                  <div style={{ fontSize: 10, color: "#fb923c", fontWeight: 600, textTransform: "uppercase" }}>BOBA</div>
+                  <div style={{ fontSize: 10, color: "#444", fontWeight: 600, textTransform: "uppercase" as const }}>Month</div>
+                  <div style={{ fontSize: 10, color: "#444", fontWeight: 600, textTransform: "uppercase" as const }}>Breaks</div>
+                  <div style={{ fontSize: 10, color: "#4ade80", fontWeight: 600, textTransform: "uppercase" as const }}>Revenue</div>
+                  <div className="fin-pnl-hide" style={{ fontSize: 10, color: "#f87171", fontWeight: 600, textTransform: "uppercase" as const }}>Fees</div>
+                  <div className="fin-pnl-hide" style={{ fontSize: 10, color: "#f87171", fontWeight: 600, textTransform: "uppercase" as const }}>Supplies</div>
+                  <div className="fin-pnl-hide" style={{ fontSize: 10, color: "#f87171", fontWeight: 600, textTransform: "uppercase" as const }}>Other exp.</div>
+                  <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 600, textTransform: "uppercase" as const }}>Profit</div>
+                  <div style={{ fontSize: 10, color: "#38bdf8", fontWeight: 600, textTransform: "uppercase" as const }}>Valley</div>
+                  <div style={{ fontSize: 10, color: "#fb923c", fontWeight: 600, textTransform: "uppercase" as const }}>BOBA</div>
                 </div>
                 {months.map((m, i) => {
                   if (m.breakCount === 0 && m.manual === 0) return null;
+                  const boba = yearBreaks.filter(b => b.date?.startsWith(m.key)).reduce((s, b) => s + parseFloat(b.imc_take || "0"), 0);
                   return (
                     <div key={i} className="fin-pnl-row">
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>{MONTH_NAMES[m.month]}</div>
+                      <div style={{ fontWeight: 600, color: "#e5e5e5" }}>{MONTH_NAMES[m.month]}</div>
                       <div style={{ color: "#555" }}>{m.breakCount}</div>
                       <div style={{ color: "#4ade80", fontWeight: 600 }}>${m.revenue.toFixed(0)}</div>
-                      <div className="fin-pnl-col-hide" style={{ color: "#f87171" }}>-${m.fees.toFixed(0)}</div>
-                      <div className="fin-pnl-col-hide" style={{ color: "#f87171" }}>-${(m.supplies + m.coupons + m.promos + m.chasers).toFixed(0)}</div>
-                      <div className="fin-pnl-col-hide" style={{ color: "#f87171" }}>-${m.manual.toFixed(0)}</div>
+                      <div className="fin-pnl-hide" style={{ color: "#f87171" }}>-${m.fees.toFixed(0)}</div>
+                      <div className="fin-pnl-hide" style={{ color: "#f87171" }}>-${(m.supplies + m.coupons + m.promos + m.chasers).toFixed(0)}</div>
+                      <div className="fin-pnl-hide" style={{ color: "#f87171" }}>-${m.manual.toFixed(0)}</div>
                       <div style={{ color: m.profit >= 0 ? "#a78bfa" : "#f87171", fontWeight: 600 }}>${m.profit.toFixed(0)}</div>
                       <div style={{ color: "#38bdf8" }}>${m.valley.toFixed(0)}</div>
-                      <div style={{ color: "#fb923c" }}>${(m.revenue * 0.7 - m.fees * 0.7).toFixed(0)}</div>
+                      <div style={{ color: "#fb923c" }}>${boba.toFixed(0)}</div>
                     </div>
                   );
                 })}
-                {/* Totals row */}
+                {/* Totals */}
                 <div className="fin-pnl-row" style={{ borderTop: "1px solid #333", borderBottom: "none", fontWeight: 700 }}>
-                  <div style={{ fontSize: 12, color: "#aaa" }}>TOTAL</div>
+                  <div style={{ color: "#aaa", fontSize: 11 }}>TOTAL</div>
                   <div style={{ color: "#aaa" }}>{yearBreaks.length}</div>
                   <div style={{ color: "#4ade80" }}>${grossRevenue.toFixed(0)}</div>
-                  <div className="fin-pnl-col-hide" style={{ color: "#f87171" }}>-${whatnotFees.toFixed(0)}</div>
-                  <div className="fin-pnl-col-hide" style={{ color: "#f87171" }}>-${(breakSupplies + breakCoupons + breakPromos + breakChasers).toFixed(0)}</div>
-                  <div className="fin-pnl-col-hide" style={{ color: "#f87171" }}>-${manualExpensesTotal.toFixed(0)}</div>
+                  <div className="fin-pnl-hide" style={{ color: "#f87171" }}>-${whatnotFees.toFixed(0)}</div>
+                  <div className="fin-pnl-hide" style={{ color: "#f87171" }}>-${(breakSupplies + breakCoupons + breakPromos + breakChasers).toFixed(0)}</div>
+                  <div className="fin-pnl-hide" style={{ color: "#f87171" }}>-${manualExpensesTotal.toFixed(0)}</div>
                   <div style={{ color: "#a78bfa" }}>${yearBreaks.reduce((s, b) => s + parseFloat(b.net_profit || "0"), 0).toFixed(0)}</div>
                   <div style={{ color: "#38bdf8" }}>${valleyIncome.toFixed(0)}</div>
                   <div style={{ color: "#fb923c" }}>${bobaPayouts.toFixed(0)}</div>
@@ -632,19 +620,19 @@ Category guide:
             </div>
           </div>
 
-          {/* Schedule C helper */}
+          {/* Schedule C */}
           <div style={{ ...s.section, borderColor: "#a78bfa33" }}>
             <div style={s.sectionTitle}>📝 Schedule C helper — {selectedYear}</div>
             <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Key numbers for your self-employment tax return (Form 1040, Schedule C)</p>
-            <div className="fin-grid-2">
+            <div className="fin-schedule-grid">
               {[
                 { line: "Line 1", label: "Gross receipts / sales", value: grossRevenue, color: "#4ade80" },
                 { line: "Line 2", label: "Returns & allowances (coupons)", value: breakCoupons, color: "#f87171" },
-                { line: "Line 4", label: "Cost of goods sold (cards/chasers)", value: breakChasers, color: "#f87171" },
+                { line: "Line 4", label: "Cost of goods sold (chasers)", value: breakChasers, color: "#f87171" },
                 { line: "Line 17", label: "Legal & professional services", value: categoryTotals["professional"] || 0, color: "#f87171" },
                 { line: "Line 18", label: "Office expense", value: categoryTotals["supplies"] || 0, color: "#f87171" },
-                { line: "Line 22", label: "Supplies", value: breakSupplies, color: "#f87171" },
-                { line: "Line 27a", label: "Other expenses (fees, software)", value: (categoryTotals["platform_fees"] || 0) + (categoryTotals["software"] || 0) + whatnotFees, color: "#f87171" },
+                { line: "Line 22", label: "Supplies (shipping & packaging)", value: breakSupplies, color: "#f87171" },
+                { line: "Line 27a", label: "Other expenses (platform fees, software)", value: (categoryTotals["platform_fees"] || 0) + (categoryTotals["software"] || 0) + whatnotFees, color: "#f87171" },
                 { line: "Net profit (Line 31)", label: "Your Valley take", value: valleyIncome, color: "#a78bfa" },
               ].map((item, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#0f0f0f", borderRadius: 8 }}>
@@ -656,8 +644,8 @@ Category guide:
                 </div>
               ))}
             </div>
-            <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 12, fontSize: 12, color: "#555", marginTop: 8 }}>
-              ⚠️ This is a guide only — consult a CPA or tax professional before filing. Numbers are estimates based on your break data.
+            <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 12, fontSize: 12, color: "#555", marginTop: 12 }}>
+              ⚠️ Guide only — consult a CPA before filing.
             </div>
           </div>
 
