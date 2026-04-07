@@ -101,7 +101,7 @@ export default function Home() {
       {(outOfStockItems.length > 0 || lowStockItems.length > 0 || unsubmittedBreaks.length > 0 || pendingLots.length > 0) && (
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           {outOfStockItems.length > 0 && (
-            <Link href="/inventory" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+            <Link href="/dashboard/inventory" style={{ textDecoration: "none", flex: "1 1 180px" }}>
               <div style={{ background: "#1a0000", border: "1px solid #f8717144", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>🚨</span>
                 <div>
@@ -112,7 +112,7 @@ export default function Home() {
             </Link>
           )}
           {lowStockItems.length > 0 && (
-            <Link href="/inventory" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+            <Link href="/dashboard/inventory" style={{ textDecoration: "none", flex: "1 1 180px" }}>
               <div style={{ background: "#1a0f00", border: "1px solid #fb923c44", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>⚠️</span>
                 <div>
@@ -123,7 +123,7 @@ export default function Home() {
             </Link>
           )}
           {unsubmittedBreaks.length > 0 && (
-            <Link href="/breaks" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+            <Link href="/dashboard/breaks" style={{ textDecoration: "none", flex: "1 1 180px" }}>
               <div style={{ background: "#0d0d1a", border: "1px solid #a78bfa44", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>📋</span>
                 <div>
@@ -134,7 +134,7 @@ export default function Home() {
             </Link>
           )}
           {pendingLots.length > 0 && (
-            <Link href="/lot-comp" style={{ textDecoration: "none", flex: "1 1 180px" }}>
+            <Link href="/dashboard/lot-comp" style={{ textDecoration: "none", flex: "1 1 180px" }}>
               <div style={{ background: "#0d1a0d", border: "1px solid #4ade8044", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>🏷️</span>
                 <div>
@@ -147,7 +147,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* All time stats — 4 col desktop, 2 col mobile */}
+      {/* All time stats */}
       <div className="home-grid-4">
         <div style={s.statCard}>
           <div style={s.label}>Total revenue</div>
@@ -239,12 +239,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* Lot comps + Stock alerts — 2 col desktop, 1 col mobile */}
+      {/* Lot comps + Stock alerts */}
       <div className="home-grid-2">
         <div style={s.section}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={s.sectionTitle}>🏷️ Lot comps</div>
-            <Link href="/lot-comp" style={{ fontSize: 12, color: "#555", textDecoration: "none" }}>View all →</Link>
+            <Link href="/dashboard/lot-comp" style={{ fontSize: 12, color: "#555", textDecoration: "none" }}>View all →</Link>
           </div>
           {lotComps.length === 0 ? (
             <p style={{ color: "#555", fontSize: 13 }}>No lots yet</p>
@@ -284,7 +284,7 @@ export default function Home() {
         <div style={s.section}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={s.sectionTitle}>📦 Stock alerts</div>
-            <Link href="/inventory" style={{ fontSize: 12, color: "#555", textDecoration: "none" }}>View inventory →</Link>
+            <Link href="/dashboard/inventory" style={{ fontSize: 12, color: "#555", textDecoration: "none" }}>View inventory →</Link>
           </div>
           {outOfStockItems.length === 0 && lowStockItems.length === 0 ? (
             <p style={{ color: "#4ade80", fontSize: 13 }}>✓ All items well stocked</p>
@@ -313,11 +313,11 @@ export default function Home() {
       {/* Quick nav */}
       <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
         {[
-          { href: "/breaks", label: "→ Log a break", color: "#f472b6" },
-          { href: "/lot-comp", label: "→ New lot comp", color: "#a78bfa" },
-          { href: "/card-inventory", label: "→ Card inventory", color: "#fb923c" },
-          { href: "/analytics", label: "→ Analytics", color: "#38bdf8" },
-          { href: "/settings", label: "→ Settings", color: "#4ade80" },
+          { href: "/dashboard/breaks", label: "→ Log a break", color: "#f472b6" },
+          { href: "/dashboard/lot-comp", label: "→ New lot comp", color: "#a78bfa" },
+          { href: "/dashboard/card-inventory", label: "→ Card inventory", color: "#fb923c" },
+          { href: "/dashboard/analytics", label: "→ Analytics", color: "#38bdf8" },
+          { href: "/dashboard/settings", label: "→ Settings", color: "#4ade80" },
         ].map(({ href, label, color }) => (
           <Link key={href} href={href} style={{ fontSize: 13, color, textDecoration: "none", background: color + "11", border: `1px solid ${color}33`, borderRadius: 8, padding: "8px 14px", fontWeight: 600 }}>
             {label}
