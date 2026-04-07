@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SECRET_KEY!
-);
+const USERS: Record<string, { password: string; role: string; name: string }> = {
+  mitch: { password: "242424", role: "admin", name: "Mitch" },
+  caitlin: { password: "ValleyCait", role: "employee", name: "Caitlin" },
+  terrance: { password: "ValleyTerr", role: "employee", name: "Terrance" },
+};
 
 export async function POST(request: NextRequest) {
   const { username, password } = await request.json();
@@ -15,23 +15,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Username and password required" }, { status: 400 });
   }
 
-  // Check against employees table
-  const { data: employee, error } = await supabase
-    .from("employees")
-    .select("*")
-    .eq("username", username.toLowerCase().trim())
-    .eq("active", true)
-    .single();
+  const user = USERS[username.toLowerCase().trim()];
 
-  if (error || !employee) {
+  if (!user || user.password !== password) {
     return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
   }
 
-  if (employee.password_hash !== password) {
-    return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
-  }
-
-  const res = NextResponse.json({ ok: true, role: employee.role, name: employee.name });
+  const res = NextResponse.json({ ok: true, role: user.role, name: user.name });
 
   res.cookies.set("vhh-auth", "authenticated", {
     httpOnly: true,
@@ -39,13 +29,13 @@ export async function POST(request: NextRequest) {
     path: "/",
   });
 
-  res.cookies.set("vhh-role", employee.role, {
+  res.cookies.set("vhh-role", user.role, {
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
   });
 
-  res.cookies.set("vhh-user", employee.name, {
+  res.cookies.set("vhh-user", user.name, {
     httpOnly: false,
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
