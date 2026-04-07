@@ -105,8 +105,10 @@ export default function Customers() {
             {filtered.map((c, i) => (
               <div
                 key={i}
-                onClick={() => router.push(`/customers/${encodeURIComponent(c.username)}`)}
+                onClick={() => router.push(`/dashboard/customers/${encodeURIComponent(c.username)}`)}
                 style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", cursor: "pointer" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#1a1a1a")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#111")}
               >
                 {/* Top row */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
