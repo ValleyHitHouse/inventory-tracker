@@ -25,6 +25,57 @@ function NavLink({ href, emoji, label, soon, onClick }: {
   );
 }
 
+function WebsiteManagementNav() {
+  const pathname = usePathname();
+  const isActive =
+    pathname.startsWith("/dashboard/public-breaks") ||
+    pathname.startsWith("/dashboard/top-hits") ||
+    pathname.startsWith("/dashboard/1of1") ||
+    pathname.startsWith("/dashboard/slides");
+  const [open, setOpen] = useState(isActive);
+
+  useEffect(() => {
+    if (isActive) setOpen(true);
+  }, [isActive]);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          width: "100%", padding: "9px 12px", borderRadius: 8,
+          fontSize: 13, fontWeight: 500, cursor: "pointer",
+          color: isActive ? "#fb923c" : "#aaa",
+          background: isActive ? "#1a0f00" : "transparent",
+          borderLeft: isActive ? "2px solid #fb923c" : "2px solid transparent",
+          border: "none", outline: "none", textAlign: "left" as const,
+          boxSizing: "border-box" as const,
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span>🌐</span>
+          <span>Website Management</span>
+        </span>
+        <span style={{
+          fontSize: 10, color: "#444",
+          transition: "transform 0.2s",
+          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          display: "inline-block",
+        }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ paddingLeft: 16, marginTop: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+          <NavLink href="/dashboard/public-breaks" emoji="📅" label="Break Schedule" />
+          <NavLink href="/dashboard/top-hits" emoji="🔥" label="Top Hits" />
+          <NavLink href="/dashboard/1of1" emoji="✨" label="1/1 Tracker" />
+          <NavLink href="/dashboard/slides" emoji="🎠" label="Hero Slides" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [role, setRole] = useState<string>("");
@@ -35,7 +86,6 @@ export default function DashboardSidebar() {
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   useEffect(() => {
-    // Read role from cookie
     const cookies = document.cookie.split(";").reduce((acc, c) => {
       const [k, v] = c.trim().split("=");
       acc[k] = v;
@@ -68,14 +118,18 @@ export default function DashboardSidebar() {
       <NavLink href="/dashboard/card-inventory" emoji="📋" label="Card Inventory" />
       <NavLink href="/dashboard/lot-comp" emoji="🏷️" label="Lot Comps" />
       <NavLink href="/dashboard/hours" emoji="⏱️" label="My Hours" />
-      {isAdmin && <>
-        <div style={{ height: 1, background: "#1e1e1e", margin: "8px 12px" }} />
-        <div style={{ fontSize: 10, color: "#333", textTransform: "uppercase", letterSpacing: ".6px", padding: "4px 12px" }}>Admin only</div>
-        <NavLink href="/dashboard/analytics" emoji="📊" label="Analytics" />
-        <NavLink href="/dashboard/financials" emoji="🧾" label="Financials" />
-        <NavLink href="/dashboard/employees" emoji="👤" label="Employees" />
-        <NavLink href="/dashboard/settings" emoji="⚙️" label="Settings" />
-      </>}
+      {isAdmin && (
+        <>
+          <div style={{ height: 1, background: "#1e1e1e", margin: "8px 12px" }} />
+          <div style={{ fontSize: 10, color: "#333", textTransform: "uppercase", letterSpacing: ".6px", padding: "4px 12px" }}>Admin only</div>
+          <NavLink href="/dashboard/analytics" emoji="📊" label="Analytics" />
+          <NavLink href="/dashboard/financials" emoji="🧾" label="Financials" />
+          <NavLink href="/dashboard/employees" emoji="👤" label="Employees" />
+          <NavLink href="/dashboard/settings" emoji="⚙️" label="Settings" />
+          <div style={{ height: 1, background: "#1e1e1e", margin: "8px 12px" }} />
+          <WebsiteManagementNav />
+        </>
+      )}
     </nav>
   );
 
@@ -85,24 +139,38 @@ export default function DashboardSidebar() {
         onClick={() => setMobileOpen(true)}
         className="vhh-hamburger"
         aria-label="Open menu"
-        style={{ display: "none", position: "fixed", top: 12, left: 12, zIndex: 300, background: "#111", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fb923c", cursor: "pointer", padding: "8px 10px", fontSize: 18, lineHeight: 1 }}
+        style={{
+          display: "none", position: "fixed", top: 12, left: 12, zIndex: 300,
+          background: "#111", border: "1px solid #2a2a2a", borderRadius: 8,
+          color: "#fb923c", cursor: "pointer", padding: "8px 10px",
+          fontSize: 18, lineHeight: 1,
+        }}
       >☰</button>
 
       <div
         onClick={() => setMobileOpen(false)}
         className={`vhh-overlay${mobileOpen ? " vhh-overlay-open" : ""}`}
-        style={{ display: "none", position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 149 }}
+        style={{
+          display: "none", position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.6)", zIndex: 149,
+        }}
       />
 
       <div
         className={`vhh-sidebar${mobileOpen ? " vhh-sidebar-open" : ""}`}
-        style={{ width: 220, background: "#111", borderRight: "1px solid #1e1e1e", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 150 }}
+        style={{
+          width: 220, background: "#111", borderRight: "1px solid #1e1e1e",
+          display: "flex", flexDirection: "column",
+          position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 150,
+        }}
       >
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e1e1e", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <img src="/LOGO-BG.png" alt="ValleyHitHouse" style={{ width: 140, height: "auto" }} />
           <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>Dashboard</div>
         </div>
+
         {navLinks}
+
         <div style={{ padding: "12px 16px", borderTop: "1px solid #1e1e1e" }}>
           {userName && (
             <div style={{ fontSize: 12, color: "#555", marginBottom: 8 }}>
