@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   });
 
   res.cookies.set("vhh-role", user.role, {
-    httpOnly: true,
+    httpOnly: false,
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
   });
