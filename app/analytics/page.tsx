@@ -18,16 +18,22 @@ function StatBox({ label, value, color, sub }: { label: string; value: any; colo
 export default function AnalyticsPage() {
   const [breaks, setBreaks] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
   const [period, setPeriod] = useState("Last 30 days");
   const [loading, setLoading] = useState(true);
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     async function load() {
-      const { data: breaksData } = await supabase.from("Breaks").select("*").order("date", { ascending: true });
-      const { data: ordersData } = await supabase.from("BreakOrders").select("buyer_username, price, placed_at, break_id").eq("cancelled", false);
-      if (breaksData) setBreaks(breaksData);
-      if (ordersData) setOrders(ordersData);
+      const [breaksRes, ordersRes, payoutsRes] = await Promise.all([
+        supabase.from("Breaks").select("*").order("date", { ascending: true }),
+        supabase.from("BreakOrders").select("buyer_username, price, placed_at, break_id").eq("cancelled", false),
+        supabase.from("payouts").select("*").order("month", { ascending: false }),
+      ]);
+      if (breaksRes.data) setBreaks(breaksRes.data);
+      if (ordersRes.data) setOrders(ordersRes.data);
+      if (payoutsRes.data) setPayouts(payoutsRes.data);
       setLoading(false);
     }
     load();
@@ -81,6 +87,87 @@ export default function AnalyticsPage() {
   const chartBreaks = filtered.slice(-12);
   const maxRevenue = Math.max(...chartBreaks.map(b => parseFloat(b.revenue || "0")), 1);
 
+  // --- Payouts ledger logic ---
+  // Group all breaks by month
+  const monthlyBreaks: Record<string, { boba: number; valley: number; count: number }> = {};
+  for (const b of breaks) {
+    if (!b.date) continue;
+    const month = b.date.slice(0, 7); // "2026-04"
+    if (!monthlyBreaks[month]) monthlyBreaks[month] = { boba: 0, valley: 0, count: 0 };
+    monthlyBreaks[month].boba += parseFloat(b.imc_take || "0");
+    monthlyBreaks[month].valley += parseFloat(b.valley_take || "0");
+    monthlyBreaks[month].count += 1;
+  }
+
+  // Merge with payouts records
+  const payoutMap: Record<string, any> = {};
+  for (const p of payouts) payoutMap[p.month] = p;
+
+  const allMonths = Array.from(new Set([
+    ...Object.keys(monthlyBreaks),
+    ...Object.keys(payoutMap),
+  ])).sort((a, b) => b.localeCompare(a));
+
+  function formatMonth(m: string) {
+    const [year, month] = m.split("-");
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+
+  async function markBobaPaid(month: string, amount: number) {
+    setMarkingPaid(`boba-${month}`);
+    const existing = payoutMap[month];
+    if (existing) {
+      await supabase.from("payouts").update({ boba_paid_at: new Date().toISOString() }).eq("month", month);
+    } else {
+      await supabase.from("payouts").insert({ month, boba_amount: amount, valley_amount: monthlyBreaks[month]?.valley || 0, boba_paid_at: new Date().toISOString() });
+    }
+    const { data } = await supabase.from("payouts").select("*").order("month", { ascending: false });
+    if (data) setPayouts(data);
+    setMarkingPaid(null);
+  }
+
+  async function markValleyPaid(month: string, amount: number) {
+    setMarkingPaid(`valley-${month}`);
+    const existing = payoutMap[month];
+    if (existing) {
+      await supabase.from("payouts").update({ valley_paid_at: new Date().toISOString() }).eq("month", month);
+    } else {
+      await supabase.from("payouts").insert({ month, valley_amount: amount, boba_amount: monthlyBreaks[month]?.boba || 0, valley_paid_at: new Date().toISOString() });
+    }
+    const { data } = await supabase.from("payouts").select("*").order("month", { ascending: false });
+    if (data) setPayouts(data);
+    setMarkingPaid(null);
+  }
+
+  async function unmarkBobaPaid(month: string) {
+    setMarkingPaid(`boba-${month}`);
+    await supabase.from("payouts").update({ boba_paid_at: null }).eq("month", month);
+    const { data } = await supabase.from("payouts").select("*").order("month", { ascending: false });
+    if (data) setPayouts(data);
+    setMarkingPaid(null);
+  }
+
+  async function unmarkValleyPaid(month: string) {
+    setMarkingPaid(`valley-${month}`);
+    await supabase.from("payouts").update({ valley_paid_at: null }).eq("month", month);
+    const { data } = await supabase.from("payouts").select("*").order("month", { ascending: false });
+    if (data) setPayouts(data);
+    setMarkingPaid(null);
+  }
+
+  const totalBobaUnpaid = allMonths.reduce((sum, month) => {
+    const paid = payoutMap[month]?.boba_paid_at;
+    if (paid) return sum;
+    return sum + (monthlyBreaks[month]?.boba || 0);
+  }, 0);
+
+  const totalValleyUnpaid = allMonths.reduce((sum, month) => {
+    const paid = payoutMap[month]?.valley_paid_at;
+    if (paid) return sum;
+    return sum + (monthlyBreaks[month]?.valley || 0);
+  }, 0);
+
   const s = {
     shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", width: "100%", boxSizing: "border-box" as const },
     content: { padding: "24px 16px", maxWidth: 1200, margin: "0 auto", width: "100%", boxSizing: "border-box" as const },
@@ -96,6 +183,9 @@ export default function AnalyticsPage() {
     .an-last-break { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; }
     .an-expense-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
     .an-bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .an-payout-outstanding { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .an-payout-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 12px 0; border-bottom: 1px solid #161616; }
+    .an-payout-header { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid #1e1e1e; margin-bottom: 4px; }
     @media (max-width: 768px) {
       .an-periods { gap: 6px; }
       .an-periods button { flex: 1; font-size: 11px !important; padding: 6px 8px !important; }
@@ -104,6 +194,9 @@ export default function AnalyticsPage() {
       .an-last-break { grid-template-columns: 1fr 1fr; }
       .an-expense-grid { grid-template-columns: 1fr; gap: 16px; }
       .an-bottom-grid { grid-template-columns: 1fr; }
+      .an-payout-outstanding { grid-template-columns: 1fr 1fr; }
+      .an-payout-header { display: none; }
+      .an-payout-row { grid-template-columns: 1fr; gap: 10px; }
     }
   `;
 
@@ -259,6 +352,104 @@ export default function AnalyticsPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ---- PAYOUTS LEDGER ---- */}
+          <div style={s.section}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+              <div style={s.sectionTitle}>💰 Monthly payouts ledger</div>
+              <div style={{ fontSize: 12, color: "#555" }}>All time · mark each month as paid when settled</div>
+            </div>
+
+            {/* Outstanding totals */}
+            <div className="an-payout-outstanding">
+              <div style={{ background: totalBobaUnpaid > 0 ? "#1a0f00" : "#0f1a0f", border: `1px solid ${totalBobaUnpaid > 0 ? "#fb923c44" : "#4ade8044"}`, borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>BOBA outstanding</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: totalBobaUnpaid > 0 ? "#fb923c" : "#4ade80" }}>${totalBobaUnpaid.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{totalBobaUnpaid > 0 ? "Unpaid balance" : "All paid ✓"}</div>
+              </div>
+              <div style={{ background: totalValleyUnpaid > 0 ? "#1a0f00" : "#0f1a0f", border: `1px solid ${totalValleyUnpaid > 0 ? "#38bdf844" : "#4ade8044"}`, borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Valley outstanding</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: totalValleyUnpaid > 0 ? "#38bdf8" : "#4ade80" }}>${totalValleyUnpaid.toFixed(2)}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{totalValleyUnpaid > 0 ? "Unpaid balance" : "All paid ✓"}</div>
+              </div>
+            </div>
+
+            {/* Column headers — desktop only */}
+            <div className="an-payout-header">
+              <div style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Month</div>
+              <div style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Breaks</div>
+              <div style={{ fontSize: 11, color: "#fb923c", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>BOBA (70%)</div>
+              <div style={{ fontSize: 11, color: "#38bdf8", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Valley (30%)</div>
+              <div style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px" }}>Status</div>
+            </div>
+
+            {/* Monthly rows */}
+            {allMonths.length === 0 ? (
+              <p style={{ color: "#555", fontSize: 13 }}>No breaks logged yet</p>
+            ) : allMonths.map(month => {
+              const mb = monthlyBreaks[month] || { boba: 0, valley: 0, count: 0 };
+              const payout = payoutMap[month];
+              const bobaPaid = !!payout?.boba_paid_at;
+              const valleyPaid = !!payout?.valley_paid_at;
+              const bothPaid = bobaPaid && valleyPaid;
+
+              return (
+                <div key={month} className="an-payout-row" style={{ opacity: bothPaid ? 0.6 : 1 }}>
+                  {/* Month */}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{formatMonth(month)}</div>
+                    {bothPaid && <div style={{ fontSize: 11, color: "#4ade80", marginTop: 2 }}>✓ Fully paid</div>}
+                  </div>
+
+                  {/* Break count */}
+                  <div style={{ fontSize: 13, color: "#555" }}>
+                    <span style={{ color: "#aaa", fontWeight: 600 }}>{mb.count}</span> break{mb.count !== 1 ? "s" : ""}
+                  </div>
+
+                  {/* BOBA amount + pay button */}
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#fb923c", marginBottom: 4 }}>${mb.boba.toFixed(2)}</div>
+                    {bobaPaid ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <span style={{ fontSize: 11, color: "#4ade80" }}>✓ Paid {new Date(payout.boba_paid_at).toLocaleDateString()}</span>
+                        <button onClick={() => unmarkBobaPaid(month)} disabled={markingPaid === `boba-${month}`} style={{ fontSize: 10, background: "none", border: "1px solid #333", color: "#555", borderRadius: 4, padding: "2px 6px", cursor: "pointer", width: "fit-content" }}>Undo</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => markBobaPaid(month, mb.boba)} disabled={markingPaid === `boba-${month}`} style={{ fontSize: 11, background: "#fb923c22", border: "1px solid #fb923c44", color: "#fb923c", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        {markingPaid === `boba-${month}` ? "..." : "Mark paid"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Valley amount + pay button */}
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#38bdf8", marginBottom: 4 }}>${mb.valley.toFixed(2)}</div>
+                    {valleyPaid ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <span style={{ fontSize: 11, color: "#4ade80" }}>✓ Paid {new Date(payout.valley_paid_at).toLocaleDateString()}</span>
+                        <button onClick={() => unmarkValleyPaid(month)} disabled={markingPaid === `valley-${month}`} style={{ fontSize: 10, background: "none", border: "1px solid #333", color: "#555", borderRadius: 4, padding: "2px 6px", cursor: "pointer", width: "fit-content" }}>Undo</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => markValleyPaid(month, mb.valley)} disabled={markingPaid === `valley-${month}`} style={{ fontSize: 11, background: "#38bdf822", border: "1px solid #38bdf844", color: "#38bdf8", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        {markingPaid === `valley-${month}` ? "..." : "Mark paid"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Overall status badge */}
+                  <div>
+                    {bothPaid ? (
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#4ade8022", color: "#4ade80", fontWeight: 600 }}>Settled</span>
+                    ) : bobaPaid || valleyPaid ? (
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#fb923c22", color: "#fb923c", fontWeight: 600 }}>Partial</span>
+                    ) : (
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#f8717122", color: "#f87171", fontWeight: 600 }}>Unpaid</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
         </>}
