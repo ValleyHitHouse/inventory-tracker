@@ -206,7 +206,6 @@ function CardSearchModal({ allCards, existingCards, onAdd, onClose, powerMin, po
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
         </div>
         <div style={{ display: 'flex', gap: 8, padding: '12px 16px', flexWrap: 'wrap', borderBottom: '1px solid #222' }}>
-          {(['input', 'select', 'select', 'select'] as const).map((_, i) => null)}
           <input autoFocus placeholder="Search hero or card #..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: '#1a1a1a', border: '1px solid #333', color: '#f1f1f1', padding: '7px 10px', borderRadius: 6, fontSize: '0.85rem', flex: 1, minWidth: 140 }} />
           <select value={filterSet} onChange={e => setFilterSet(e.target.value)}
@@ -233,7 +232,7 @@ function CardSearchModal({ allCards, existingCards, onAdd, onClose, powerMin, po
             const isDup = isDuplicateCard(existingCards, card);
             return (
               <div key={card.id} onClick={() => !isDup && onAdd(card, slotParallel || card.parallel)}
-                style={{ padding: '10px 12px', borderRadius: 6, cursor: isDup ? 'not-allowed' : 'pointer', marginBottom: 4, background: '#1a1a1a', border: '1px solid transparent', opacity: isDup ? 0.4 : 1, transition: 'all 0.1s' }}
+                style={{ padding: '10px 12px', borderRadius: 6, cursor: isDup ? 'not-allowed' : 'pointer', marginBottom: 4, background: '#1a1a1a', border: '1px solid transparent', opacity: isDup ? 0.4 : 1 }}
                 onMouseEnter={e => { if (!isDup) (e.currentTarget as HTMLElement).style.borderColor = '#f97316'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -327,7 +326,7 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
 
   const s: Record<string, React.CSSProperties> = {
     section: { marginBottom: 16 },
-    label: { fontSize: '0.78rem', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' },
+    label: { fontSize: '0.78rem', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' } as React.CSSProperties,
     chip: { padding: '5px 12px', borderRadius: 20, border: '1px solid #333', background: '#1a1a1a', color: '#aaa', cursor: 'pointer', fontSize: '0.82rem' },
     chipSelected: { padding: '5px 12px', borderRadius: 20, border: '1px solid #f97316', background: '#f97316', color: '#000', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 },
     chipDisabled: { padding: '5px 12px', borderRadius: 20, border: '1px solid #222', background: '#111', color: '#444', cursor: 'not-allowed', fontSize: '0.82rem' },
@@ -336,7 +335,6 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
 
   return (
     <div style={{ background: '#111', borderRadius: 12, padding: 20 }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <input value={deck.name} onChange={e => onUpdate({ ...deck, name: e.target.value })}
           placeholder={isCoach ? 'Coach Name' : 'Player Name'}
@@ -349,10 +347,9 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
         <div key={i} style={{ color: '#fbbf24', fontSize: '0.82rem', background: '#2d2408', padding: '4px 8px', borderRadius: 4, marginBottom: 4 }}>⚠ {e}</div>
       ))}
 
-      {/* Parallel selector */}
       {!isCoach && (
         <div style={s.section}>
-          <p style={s.label}>Select Parallels ({deck.selectedParallels.length}/{MAX_PARALLELS})</p>
+          <p style={s.label as React.CSSProperties}>Select Parallels ({deck.selectedParallels.length}/{MAX_PARALLELS})</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {ALL_PARALLELS.map(p => {
               const selected = deck.selectedParallels.includes(p);
@@ -368,9 +365,8 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
         </div>
       )}
 
-      {/* Power level summary */}
       <div style={s.section}>
-        <p style={s.label}>Power Levels (max {MAX_PER_POWER_LEVEL} per level · range {isCoach ? `${COACH_POWER_MIN}–${COACH_POWER_MAX}` : `${PLAYER_POWER_MIN}–${PLAYER_POWER_MAX}`})</p>
+        <p style={s.label as React.CSSProperties}>Power Levels (max {MAX_PER_POWER_LEVEL} per level · range {isCoach ? `${COACH_POWER_MIN}–${COACH_POWER_MAX}` : `${PLAYER_POWER_MIN}–${PLAYER_POWER_MAX}`})</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {Object.entries(powerCounts).sort((a, b) => Number(b[0]) - Number(a[0])).map(([power, count]) => (
             <div key={power} style={{ padding: '3px 10px', borderRadius: 6, background: '#1a1a1a', border: `1px solid ${count >= MAX_PER_POWER_LEVEL ? '#f87171' : '#333'}`, fontSize: '0.8rem', color: count >= MAX_PER_POWER_LEVEL ? '#f87171' : '#aaa' }}>
@@ -380,23 +376,20 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
         </div>
       </div>
 
-      {/* Parallel progress */}
       {!isCoach && deck.selectedParallels.length > 0 && (
         <div style={s.section}>
-          <p style={s.label}>Parallel Progress</p>
+          <p style={s.label as React.CSSProperties}>Parallel Progress</p>
           {deck.selectedParallels.map(p => (
             <ParallelProgress key={p} parallel={p} count={getParallelCount(deck.cards, p)} isUnlocked={getParallelCount(deck.cards, p) >= CARDS_PER_PARALLEL} />
           ))}
         </div>
       )}
 
-      {/* Add card button */}
       <button onClick={() => setShowCardSearch(true)}
         style={{ width: '100%', padding: 10, background: '#1a1a1a', border: '1px dashed #444', color: '#f97316', borderRadius: 8, cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, marginBottom: 16 }}>
         + Add Card
       </button>
 
-      {/* Cards list */}
       <div>
         {!isCoach && deck.selectedParallels.map(parallel => (
           <div key={parallel} style={{ marginBottom: 8, background: '#151515', borderRadius: 8, overflow: 'hidden' }}>
@@ -405,19 +398,18 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
               <span>{getParallelCount(deck.cards, parallel)}/{CARDS_PER_PARALLEL}</span>
             </div>
             {(cardsByParallel[parallel] || []).map((card, idx) => (
-              <div key={idx} style={{ ...s.cardItem, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none' }}>
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#1a1a1a', borderBottom: '1px solid #222' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{card.hero_name}</div>
                   <div style={{ fontSize: '0.75rem', color: '#666' }}>#{card.card_number} · {card.set_name} · ⚡{card.power} · {card.weapon_type}</div>
                 </div>
                 <button onClick={() => removeCard(deck.cards.indexOf(card))}
-                  style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1rem', padding: '2px 6px', borderRadius: 4 }}>✕</button>
+                  style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1rem', padding: '2px 6px' }}>✕</button>
               </div>
             ))}
           </div>
         ))}
 
-        {/* Superfoil cards */}
         {!isCoach && (cardsByParallel['Superfoil'] || []).map((card, idx) => (
           <div key={`sf-${idx}`} style={{ ...s.cardItem, borderColor: '#fbbf24', background: '#1e1a00' }}>
             <div style={{ flex: 1 }}>
@@ -429,7 +421,6 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
           </div>
         ))}
 
-        {/* Coach cards ungrouped */}
         {isCoach && deck.cards.map((card, idx) => (
           <div key={idx} style={s.cardItem}>
             <div style={{ flex: 1 }}>
@@ -442,10 +433,9 @@ function DeckBuilder({ deck, isCoach, allCards, allApexCards, onUpdate }: {
         ))}
       </div>
 
-      {/* Apex slots */}
       {deck.apexSlots.length > 0 && (
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #222' }}>
-          <p style={{ ...s.label, color: '#fbbf24' }}>🔓 Apex Unlocks</p>
+          <p style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>🔓 Apex Unlocks</p>
           {deck.apexSlots.map(slot => (
             <div key={slot.parallel} style={{ background: '#1a1500', border: '1px solid #fbbf24', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
               <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24', display: 'block', marginBottom: 6 }}>{slot.parallel} Apex</span>
@@ -491,10 +481,25 @@ export default function TeamMadnessPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    supabase.from('apex_cards').select('*').order('hero_name').then(({ data, error }) => {
-      if (!error && data) setAllCards(data);
+    async function fetchCards() {
+      let allData: ApexCard[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from('apex_cards')
+          .select('*')
+          .order('hero_name', { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        allData = [...allData, ...data];
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      setAllCards(allData);
       setLoading(false);
-    });
+    }
+    fetchCards();
   }, []);
 
   const apexCards = allCards.filter(c => c.power >= 165);
@@ -548,13 +553,11 @@ export default function TeamMadnessPage() {
       <PublicNav />
       <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f1f1f1', fontFamily: 'Inter, sans-serif', padding: '80px 16px 60px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          {/* Header */}
           <div style={{ marginBottom: 28 }}>
             <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#f97316', margin: '0 0 4px' }}>⚡ Team Madness Builder</h1>
             <p style={{ color: '#666', fontSize: '0.9rem', margin: 0 }}>Build your 4-member Apex Madness team — 3 players + 1 coach</p>
           </div>
 
-          {/* Team name + actions */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
             <input value={team.teamName} onChange={e => setTeam({ ...team, teamName: e.target.value })}
               placeholder="Team Name" style={{ background: '#1a1a1a', border: '1px solid #333', color: '#f1f1f1', padding: '8px 14px', borderRadius: 8, fontSize: '1rem', flex: 1, minWidth: 200 }} />
@@ -564,14 +567,12 @@ export default function TeamMadnessPage() {
           </div>
           {importError && <p style={{ color: '#f87171', fontSize: '0.85rem', marginBottom: 8 }}>{importError}</p>}
 
-          {/* Apex conflicts */}
           {apexConflicts.length > 0 && (
             <div style={{ background: '#3b1010', border: '1px solid #f87171', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
               {apexConflicts.map((c, i) => <div key={i} style={{ color: '#f87171', fontSize: '0.85rem' }}>⚠ {c}</div>)}
             </div>
           )}
 
-          {/* Tabs */}
           <div style={{ display: 'flex', gap: 4, background: '#111', borderRadius: 10, padding: 4, marginBottom: 20 }}>
             {tabs.map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -581,7 +582,6 @@ export default function TeamMadnessPage() {
             ))}
           </div>
 
-          {/* Deck builder */}
           {loading ? (
             <div style={{ textAlign: 'center', padding: 60, color: '#666' }}>Loading card database...</div>
           ) : (
