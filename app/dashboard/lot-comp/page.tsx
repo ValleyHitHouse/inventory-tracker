@@ -85,8 +85,6 @@ function SellerView({ id }: { id: string }) {
           .payment-btns button { width: 100% !important; }
         }
       `}</style>
-
-      {/* Header */}
       <div style={{ background: "#111", borderBottom: "1px solid #1e1e1e", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img src="/LOGO-BG.png" alt="ValleyHitHouse" style={{ width: 44, height: "auto" }} />
@@ -94,15 +92,11 @@ function SellerView({ id }: { id: string }) {
         </div>
         <div style={{ fontSize: 12, color: "#555" }}>Lot offer</div>
       </div>
-
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 16px", boxSizing: "border-box", width: "100%" }}>
-        {/* Title */}
         <div style={{ marginBottom: 24, textAlign: "center" }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, marginBottom: 8 }}>{lot.lot_name}</h1>
           {lot.seller_name && <p style={{ color: "#555", fontSize: 14, margin: 0 }}>Prepared for {lot.seller_name}</p>}
         </div>
-
-        {/* Offer amount */}
         <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: "28px 20px", marginBottom: 20, textAlign: "center" }}>
           <div style={{ fontSize: 12, color: "#555", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 8 }}>Our offer for your lot</div>
           <div style={{ fontSize: 52, fontWeight: 900, color: "#4ade80", marginBottom: 8 }}>${parseFloat(lot.total_offer || "0").toFixed(2)}</div>
@@ -111,13 +105,9 @@ function SellerView({ id }: { id: string }) {
             {lot.giveaway_count > 0 && ` + ${lot.giveaway_count} giveaway cards @ $${parseFloat(lot.giveaway_comp || "0").toFixed(2)} each`}
           </div>
         </div>
-
-        {/* Card breakdown */}
         {cards.length > 0 && (
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, overflow: "hidden", marginBottom: 20 }}>
             <div style={{ padding: "12px 16px", borderBottom: "1px solid #1e1e1e", fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: ".6px" }}>Card breakdown</div>
-
-            {/* Desktop table */}
             <div className="seller-card-table">
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "#0f0f0f" }}>
@@ -141,8 +131,6 @@ function SellerView({ id }: { id: string }) {
                 </tbody>
               </table>
             </div>
-
-            {/* Mobile card list */}
             <div className="seller-card-list" style={{ padding: "12px" }}>
               {cards.map((card, i) => (
                 <div key={i} style={{ background: "#0f0f0f", borderRadius: 8, padding: "12px 14px" }}>
@@ -166,7 +154,6 @@ function SellerView({ id }: { id: string }) {
                 </div>
               ))}
             </div>
-
             {lot.giveaway_count > 0 && (
               <div style={{ padding: "12px 16px", borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                 <span style={{ color: "#777" }}>🎁 {lot.giveaway_count} giveaway cards @ ${parseFloat(lot.giveaway_comp || "0").toFixed(2)} each</span>
@@ -175,8 +162,6 @@ function SellerView({ id }: { id: string }) {
             )}
           </div>
         )}
-
-        {/* Accept / already accepted */}
         {accepted || isAlreadyAccepted ? (
           <div style={{ background: "#0d2010", border: "1px solid #166534", borderRadius: 12, padding: 32, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
@@ -209,7 +194,6 @@ export default function LotCompPage() {
   const pathname = usePathname();
   const segments = pathname?.split("/").filter(Boolean) || [];
   const isSellerPage = segments.length === 2 && segments[0] === "lot-comp" && segments[1] !== "";
-
   if (isSellerPage) return <SellerView id={segments[1]} />;
 
   const [view, setView] = useState<"list" | "new" | "detail">("list");
@@ -222,6 +206,7 @@ export default function LotCompPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingLotId, setDeletingLotId] = useState<number | null>(null);
 
+  // New lot form
   const [lotName, setLotName] = useState("");
   const [sellerName, setSellerName] = useState("");
   const [giveawayCount, setGiveawayCount] = useState(0);
@@ -232,11 +217,28 @@ export default function LotCompPage() {
   const [allCards, setAllCards] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
   const [pickedCards, setPickedCards] = useState<Record<string, { card: any; qty: number; comp: string; subset: string }>>({});
+
+  // Detail view
   const [trackingNumber, setTrackingNumber] = useState("");
   const [carrier, setCarrier] = useState("USPS");
   const [savingTracking, setSavingTracking] = useState(false);
   const [receivingLot, setReceivingLot] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // ── EDIT MODE STATE ──────────────────────────────────────────────────────
+  const [editMode, setEditMode] = useState(false);
+  const [editLotName, setEditLotName] = useState("");
+  const [editSellerName, setEditSellerName] = useState("");
+  const [editOfferPercent, setEditOfferPercent] = useState("");
+  const [editGiveawayCount, setEditGiveawayCount] = useState(0);
+  const [editGiveawayPrice, setEditGiveawayPrice] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [editCards, setEditCards] = useState<any[]>([]);
+  const [editSelectedSet, setEditSelectedSet] = useState(0);
+  const [editActiveSubset, setEditActiveSubset] = useState("Chasers");
+  const [editCardSearch, setEditCardSearch] = useState("");
+  const [editAllCards, setEditAllCards] = useState<any[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     loadLots();
@@ -246,6 +248,10 @@ export default function LotCompPage() {
   useEffect(() => {
     fetch(SETS[selectedSet].file).then(r => r.text()).then(text => setAllCards(parseCSV(text)));
   }, [selectedSet]);
+
+  useEffect(() => {
+    fetch(SETS[editSelectedSet].file).then(r => r.text()).then(text => setEditAllCards(parseCSV(text)));
+  }, [editSelectedSet]);
 
   async function loadLots() {
     setLoading(true);
@@ -258,6 +264,7 @@ export default function LotCompPage() {
     setSelectedLot(lot);
     setTrackingNumber(lot.tracking_number || "");
     setCarrier(lot.carrier || "USPS");
+    setEditMode(false);
     const { data } = await supabase.from("lotcompcards").select("*").eq("lot_id", lot.id);
     if (data) setLotCards(data);
     setView("detail");
@@ -272,9 +279,105 @@ export default function LotCompPage() {
     loadLots();
   }
 
+  // ── ENTER EDIT MODE ──────────────────────────────────────────────────────
+  function enterEditMode() {
+    setEditLotName(selectedLot.lot_name || "");
+    setEditSellerName(selectedLot.seller_name || "");
+    setEditOfferPercent(String(selectedLot.offer_percent || "70"));
+    setEditGiveawayCount(selectedLot.giveaway_count || 0);
+    setEditGiveawayPrice(String(selectedLot.giveaway_comp || ""));
+    setEditStatus(selectedLot.status || "pending");
+    setEditCards(lotCards.map(c => ({ ...c, _comp: String(c.comp_value || "0"), _qty: c.quantity })));
+    setEditCardSearch("");
+    setEditMode(true);
+  }
+
+  // ── SAVE EDITS ───────────────────────────────────────────────────────────
+  async function saveEdits() {
+    setSavingEdit(true);
+
+    const pct = parseFloat(editOfferPercent || "0") / 100;
+    const cardCompTotal = editCards.reduce((sum, c) => sum + parseFloat(c._comp || "0") * (c._qty || 0), 0);
+    const cardOfferTotal = cardCompTotal * pct;
+    const giveawayOfferTotal = parseFloat(editGiveawayPrice || "0") * editGiveawayCount;
+    const totalOffer = cardOfferTotal + giveawayOfferTotal;
+
+    // Update lot
+    const { data: updatedLot } = await supabase.from("lotcomps").update({
+      lot_name: editLotName,
+      seller_name: editSellerName,
+      offer_percent: parseFloat(editOfferPercent || "70"),
+      giveaway_count: editGiveawayCount,
+      giveaway_comp: parseFloat(editGiveawayPrice || "0"),
+      total_comp: Math.round(cardCompTotal * 100) / 100,
+      total_offer: Math.round(totalOffer * 100) / 100,
+      status: editStatus,
+    }).eq("id", selectedLot.id).select().single();
+
+    // Delete existing cards and re-insert
+    await supabase.from("lotcompcards").delete().eq("lot_id", selectedLot.id);
+
+    const cardRows = editCards
+      .filter(c => (c._qty || 0) > 0)
+      .map(c => ({
+        lot_id: selectedLot.id,
+        card_number: c.card_number,
+        hero: c.hero,
+        athlete: c.athlete,
+        treatment: c.treatment,
+        weapon: c.weapon,
+        set_name: c.set_name,
+        subset: c.subset,
+        quantity: c._qty,
+        comp_value: parseFloat(c._comp || "0"),
+        offer_value: parseFloat(c._comp || "0") * pct,
+      }));
+
+    if (cardRows.length > 0) await supabase.from("lotcompcards").insert(cardRows);
+
+    // Refresh state
+    const refreshed = updatedLot || { ...selectedLot, lot_name: editLotName, seller_name: editSellerName, offer_percent: parseFloat(editOfferPercent), giveaway_count: editGiveawayCount, giveaway_comp: parseFloat(editGiveawayPrice || "0"), total_comp: cardCompTotal, total_offer: totalOffer, status: editStatus };
+    setSelectedLot(refreshed);
+    setLotCards(cardRows);
+    setLots(prev => prev.map(l => l.id === selectedLot.id ? refreshed : l));
+    setEditMode(false);
+    setSavingEdit(false);
+  }
+
+  // ── ADD CARD IN EDIT MODE ────────────────────────────────────────────────
+  function editPickCard(card: any) {
+    const existing = editCards.find(c =>
+      c.card_number === card["Card #"] &&
+      c.weapon === card.Weapon &&
+      c.treatment === card.Treatment &&
+      c.subset === editActiveSubset
+    );
+    if (existing) {
+      setEditCards(prev => prev.map(c => c === existing ? { ...c, _qty: (c._qty || 0) + 1 } : c));
+    } else {
+      setEditCards(prev => [...prev, {
+        card_number: card["Card #"],
+        hero: card.Hero,
+        athlete: card["Athlete Inspiration"],
+        treatment: card.Treatment,
+        weapon: card.Weapon,
+        set_name: SETS[editSelectedSet].label,
+        subset: editActiveSubset,
+        _comp: "",
+        _qty: 1,
+      }]);
+    }
+  }
+
   const filteredCards = allCards.filter(c => {
     const q = cardSearch.toLowerCase().trim();
-    const combined = [c["Card #"], c.Hero, c["Athlete Inspiration"], c.Treatment, c.Weapon, c.Power, c.Variation].join(" ").toLowerCase();
+    const combined = [c["Card #"], c.Hero, c["Athlete Inspiration"], c.Treatment, c.Weapon].join(" ").toLowerCase();
+    return !q || q.split(" ").filter(Boolean).every((word: string) => combined.includes(word));
+  }).slice(0, 50);
+
+  const editFilteredCards = editAllCards.filter(c => {
+    const q = editCardSearch.toLowerCase().trim();
+    const combined = [c["Card #"], c.Hero, c["Athlete Inspiration"], c.Treatment, c.Weapon].join(" ").toLowerCase();
     return !q || q.split(" ").filter(Boolean).every((word: string) => combined.includes(word));
   }).slice(0, 50);
 
@@ -295,7 +398,6 @@ export default function LotCompPage() {
   const cardCompTotal = Object.values(pickedCards).reduce((sum, { comp, qty }) => sum + parseFloat(comp || "0") * qty, 0);
   const cardOfferTotal = cardCompTotal * (parseFloat(offerPercent || "0") / 100);
   const giveawayOfferTotal = parseFloat(giveawayPricePerCard || "0") * giveawayCount;
-  const totalComp = cardCompTotal;
   const totalOffer = cardOfferTotal + giveawayOfferTotal;
 
   async function saveLot() {
@@ -305,7 +407,7 @@ export default function LotCompPage() {
       lot_name: lotName, seller_name: sellerName, giveaway_count: giveawayCount,
       giveaway_comp: parseFloat(giveawayPricePerCard || "0"),
       offer_percent: parseFloat(offerPercent || "70"),
-      total_comp: Math.round(totalComp * 100) / 100,
+      total_comp: Math.round(cardCompTotal * 100) / 100,
       total_offer: Math.round(totalOffer * 100) / 100,
       status: "pending",
     }).select().single();
@@ -390,6 +492,7 @@ export default function LotCompPage() {
     smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "#e5e5e5", outline: "none", width: 80, textAlign: "center" as const },
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
     label: { fontSize: 12, color: "#666", marginBottom: 5, display: "block" },
+    editInput: { background: "#0f0f0f", border: "1px solid #333", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", width: "100%", boxSizing: "border-box" as const },
   };
 
   const mobileStyles = `
@@ -413,14 +516,21 @@ export default function LotCompPage() {
     }
   `;
 
-  // DETAIL VIEW
+  // ── DETAIL VIEW ───────────────────────────────────────────────────────────
   if (view === "detail" && selectedLot) {
     const status = selectedLot.status;
     const sellerLink = `${siteUrl}/lot-comp/${selectedLot.id}`;
+
+    // Edit totals live preview
+    const editPct = parseFloat(editOfferPercent || "0") / 100;
+    const editCardComp = editCards.reduce((sum, c) => sum + parseFloat(c._comp || "0") * (c._qty || 0), 0);
+    const editTotalOffer = editCardComp * editPct + parseFloat(editGiveawayPrice || "0") * editGiveawayCount;
+
     return (
       <div style={s.shell}>
         <style>{mobileStyles}</style>
         <div style={s.content}>
+
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
             <div>
@@ -431,8 +541,19 @@ export default function LotCompPage() {
               <p style={{ fontSize: 13, color: "#555", margin: 0 }}>Seller: {selectedLot.seller_name || "—"}</p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => setView("list")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
-              {status === "arrived" && (
+              <button onClick={() => { setView("list"); setEditMode(false); }} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
+              {!editMode && (
+                <button onClick={enterEditMode} style={{ fontSize: 13, background: "#1a1a2e", border: "1px solid #7c3aed", color: "#a78bfa", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>✏️ Edit Lot</button>
+              )}
+              {editMode && (
+                <>
+                  <button onClick={() => setEditMode(false)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Cancel</button>
+                  <button onClick={saveEdits} disabled={savingEdit} style={{ ...s.submitBtn, padding: "8px 20px", fontSize: 13 }}>
+                    {savingEdit ? "Saving..." : "💾 Save Changes"}
+                  </button>
+                </>
+              )}
+              {!editMode && status === "arrived" && (
                 <button onClick={receiveLot} disabled={receivingLot} style={{ ...s.submitBtn, background: "linear-gradient(135deg,#166534,#15803d)", padding: "8px 16px", fontSize: 13 }}>
                   {receivingLot ? "Receiving..." : "📦 Receive lot"}
                 </button>
@@ -440,134 +561,243 @@ export default function LotCompPage() {
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="lc-grid-4">
-            <div style={s.section}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Card comp</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#e5e5e5" }}>${parseFloat(selectedLot.total_comp || "0").toFixed(2)}</div>
-            </div>
-            <div style={s.section}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total offer</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#4ade80" }}>${parseFloat(selectedLot.total_offer || "0").toFixed(2)}</div>
-            </div>
-            <div style={s.section}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Giveaways</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#fb923c" }}>{selectedLot.giveaway_count} @ ${parseFloat(selectedLot.giveaway_comp || "0").toFixed(2)}</div>
-            </div>
-            <div style={s.section}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Payment</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#a78bfa" }}>{selectedLot.payment_method || "—"}</div>
-            </div>
-          </div>
-
-          {/* Seller link */}
-          <div style={s.section}>
-            <div style={s.sectionTitle}>🔗 Seller page link</div>
-            <div className="lc-link-row">
-              <input style={{ ...s.input, color: "#555", fontSize: 12 }} readOnly value={sellerLink} />
-              <button onClick={copyLink} style={{ ...s.submitBtn, whiteSpace: "nowrap", padding: "10px 16px", fontSize: 13, background: copied ? "#166534" : "linear-gradient(135deg,#7c3aed,#db2777)" }}>{copied ? "✓ Copied!" : "Copy link"}</button>
-              <a href={sellerLink} target="_blank" style={{ ...s.submitBtn, whiteSpace: "nowrap", padding: "10px 16px", fontSize: 13, textDecoration: "none", background: "#1a1a2e", border: "1px solid #333", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>Open ↗</a>
-            </div>
-          </div>
-
-          {/* Tracking */}
-          <div style={s.section}>
-            <div style={s.sectionTitle}>📦 Shipping & tracking</div>
-            {status === "pending" && <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Tracking available once seller accepts.</p>}
-            <div className="lc-tracking-row">
-              <div style={{ flex: 1 }}>
-                <label style={s.label}>Tracking number</label>
-                <input style={s.input} placeholder="Enter tracking number" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} disabled={status === "pending"} />
+          {/* ── VIEW MODE ── */}
+          {!editMode && (
+            <>
+              <div className="lc-grid-4">
+                {[
+                  { label: "Card comp", val: `$${parseFloat(selectedLot.total_comp || "0").toFixed(2)}`, color: "#e5e5e5" },
+                  { label: "Total offer", val: `$${parseFloat(selectedLot.total_offer || "0").toFixed(2)}`, color: "#4ade80" },
+                  { label: "Giveaways", val: `${selectedLot.giveaway_count} @ $${parseFloat(selectedLot.giveaway_comp || "0").toFixed(2)}`, color: "#fb923c" },
+                  { label: "Payment", val: selectedLot.payment_method || "—", color: "#a78bfa" },
+                ].map(({ label, val, color }) => (
+                  <div key={label} style={s.section}>
+                    <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>{label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color }}>{val}</div>
+                  </div>
+                ))}
               </div>
-              <div>
-                <label style={s.label}>Carrier</label>
-                <select style={{ ...s.input, width: "auto" }} value={carrier} onChange={e => setCarrier(e.target.value)} disabled={status === "pending"}>
-                  <option value="USPS">USPS</option>
-                  <option value="UPS">UPS</option>
-                  <option value="FedEx">FedEx</option>
-                </select>
-              </div>
-              <button onClick={saveTracking} disabled={savingTracking || status === "pending"} style={{ ...s.submitBtn, opacity: status === "pending" ? 0.4 : 1, whiteSpace: "nowrap" }}>
-                {savingTracking ? "Saving..." : "Save tracking"}
-              </button>
-              {selectedLot.tracking_number && (
-                <a href={getTrackingUrl(selectedLot.carrier, selectedLot.tracking_number)} target="_blank" style={{ ...s.submitBtn, background: "#1a1a2e", border: "1px solid #333", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap" }}>🔍 Track</a>
-              )}
-            </div>
-            {status === "in_transit" && (
-              <button onClick={markArrived} style={{ marginTop: 12, background: "#166534", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>✓ Mark as arrived</button>
-            )}
-            {(status === "arrived" || status === "received") && (
-              <div style={{ marginTop: 12, fontSize: 13, color: "#4ade80" }}>✓ Package arrived</div>
-            )}
-          </div>
 
-          {/* Cards in lot */}
-          <div style={s.section}>
-            <div style={s.sectionTitle}>Cards in this lot</div>
-            {lotCards.length === 0 ? (
-              <p style={{ color: "#555", fontSize: 13 }}>No specific cards</p>
-            ) : (
-              <>
-                {/* Desktop table */}
-                <div className="lc-detail-cards-table">
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr style={{ background: "#0f0f0f" }}>
-                      {["Subset","#","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => (
-                        <th key={h} style={{ padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
-                      ))}
-                    </tr></thead>
-                    <tbody>
-                      {lotCards.map((card, i) => (
-                        <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
-                          <td style={{ padding: "11px 14px" }}><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span></td>
-                          <td style={{ padding: "11px 14px", color: "#555", fontFamily: "monospace", fontSize: 13 }}>{card.card_number}</td>
-                          <td style={{ padding: "11px 14px", color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.hero}</td>
-                          <td style={{ padding: "11px 14px", color: "#a78bfa", fontSize: 13 }}>{card.athlete}</td>
-                          <td style={{ padding: "11px 14px", color: "#777", fontSize: 13 }}>{card.treatment}</td>
-                          <td style={{ padding: "11px 14px", fontSize: 13 }}>{card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}</td>
-                          <td style={{ padding: "11px 14px", color: "#aaa", fontSize: 13 }}>{card.quantity}</td>
-                          <td style={{ padding: "11px 14px", color: "#e5e5e5", fontSize: 13 }}>${parseFloat(card.comp_value).toFixed(2)}</td>
-                          <td style={{ padding: "11px 14px", color: "#4ade80", fontWeight: 600, fontSize: 13 }}>${parseFloat(card.offer_value).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {/* Seller link */}
+              <div style={s.section}>
+                <div style={s.sectionTitle}>🔗 Seller page link</div>
+                <div className="lc-link-row">
+                  <input style={{ ...s.input, color: "#555", fontSize: 12 }} readOnly value={sellerLink} />
+                  <button onClick={copyLink} style={{ ...s.submitBtn, whiteSpace: "nowrap", padding: "10px 16px", fontSize: 13, background: copied ? "#166534" : "linear-gradient(135deg,#7c3aed,#db2777)" }}>{copied ? "✓ Copied!" : "Copy link"}</button>
+                  <a href={sellerLink} target="_blank" style={{ ...s.submitBtn, whiteSpace: "nowrap", padding: "10px 16px", fontSize: 13, textDecoration: "none", background: "#1a1a2e", border: "1px solid #333", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>Open ↗</a>
                 </div>
+              </div>
 
-                {/* Mobile card list */}
-                <div className="lc-detail-cards-list">
-                  {lotCards.map((card, i) => (
-                    <div key={i} style={{ background: "#0f0f0f", borderRadius: 8, padding: "12px 14px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>{card.hero}</div>
-                          <div style={{ fontSize: 12, color: "#a78bfa", marginTop: 2 }}>{card.athlete}</div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: "#4ade80" }}>${parseFloat(card.offer_value).toFixed(2)}</div>
-                          <div style={{ fontSize: 11, color: "#777" }}>Comp: ${parseFloat(card.comp_value).toFixed(2)}</div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span>
-                        {card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}
-                        {card.treatment && <span style={{ fontSize: 11, color: "#555" }}>{card.treatment}</span>}
-                        <span style={{ fontSize: 11, color: "#555" }}>Qty: {card.quantity}</span>
-                        <span style={{ fontSize: 11, color: "#555", fontFamily: "monospace" }}>{card.card_number}</span>
-                      </div>
+              {/* Tracking */}
+              <div style={s.section}>
+                <div style={s.sectionTitle}>📦 Shipping & tracking</div>
+                {status === "pending" && <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Tracking available once seller accepts.</p>}
+                <div className="lc-tracking-row">
+                  <div style={{ flex: 1 }}>
+                    <label style={s.label}>Tracking number</label>
+                    <input style={s.input} placeholder="Enter tracking number" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} disabled={status === "pending"} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Carrier</label>
+                    <select style={{ ...s.input, width: "auto" }} value={carrier} onChange={e => setCarrier(e.target.value)} disabled={status === "pending"}>
+                      <option value="USPS">USPS</option><option value="UPS">UPS</option><option value="FedEx">FedEx</option>
+                    </select>
+                  </div>
+                  <button onClick={saveTracking} disabled={savingTracking || status === "pending"} style={{ ...s.submitBtn, opacity: status === "pending" ? 0.4 : 1, whiteSpace: "nowrap" }}>
+                    {savingTracking ? "Saving..." : "Save tracking"}
+                  </button>
+                  {selectedLot.tracking_number && (
+                    <a href={getTrackingUrl(selectedLot.carrier, selectedLot.tracking_number)} target="_blank" style={{ ...s.submitBtn, background: "#1a1a2e", border: "1px solid #333", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap" }}>🔍 Track</a>
+                  )}
+                </div>
+                {status === "in_transit" && (
+                  <button onClick={markArrived} style={{ marginTop: 12, background: "#166534", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>✓ Mark as arrived</button>
+                )}
+                {(status === "arrived" || status === "received") && (
+                  <div style={{ marginTop: 12, fontSize: 13, color: "#4ade80" }}>✓ Package arrived</div>
+                )}
+              </div>
+
+              {/* Cards */}
+              <div style={s.section}>
+                <div style={s.sectionTitle}>Cards in this lot</div>
+                {lotCards.length === 0 ? <p style={{ color: "#555", fontSize: 13 }}>No specific cards</p> : (
+                  <>
+                    <div className="lc-detail-cards-table">
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead><tr style={{ background: "#0f0f0f" }}>
+                          {["Subset","#","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => (
+                            <th key={h} style={{ padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {lotCards.map((card, i) => (
+                            <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
+                              <td style={{ padding: "11px 14px" }}><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span></td>
+                              <td style={{ padding: "11px 14px", color: "#555", fontFamily: "monospace" }}>{card.card_number}</td>
+                              <td style={{ padding: "11px 14px", color: "#e5e5e5", fontWeight: 600 }}>{card.hero}</td>
+                              <td style={{ padding: "11px 14px", color: "#a78bfa" }}>{card.athlete}</td>
+                              <td style={{ padding: "11px 14px", color: "#777" }}>{card.treatment}</td>
+                              <td style={{ padding: "11px 14px" }}>{card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}</td>
+                              <td style={{ padding: "11px 14px", color: "#aaa" }}>{card.quantity}</td>
+                              <td style={{ padding: "11px 14px", color: "#e5e5e5" }}>${parseFloat(card.comp_value).toFixed(2)}</td>
+                              <td style={{ padding: "11px 14px", color: "#4ade80", fontWeight: 600 }}>${parseFloat(card.offer_value).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
+                    <div className="lc-detail-cards-list">
+                      {lotCards.map((card, i) => (
+                        <div key={i} style={{ background: "#0f0f0f", borderRadius: 8, padding: "12px 14px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 700 }}>{card.hero}</div>
+                              <div style={{ fontSize: 12, color: "#a78bfa" }}>{card.athlete}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 15, fontWeight: 700, color: "#4ade80" }}>${parseFloat(card.offer_value).toFixed(2)}</div>
+                              <div style={{ fontSize: 11, color: "#777" }}>Comp: ${parseFloat(card.comp_value).toFixed(2)}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span>
+                            {card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}
+                            <span style={{ fontSize: 11, color: "#555" }}>Qty: {card.quantity}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ── EDIT MODE ── */}
+          {editMode && (
+            <>
+              {/* Live offer preview */}
+              <div style={{ background: "#0d1a0d", border: "1px solid #166534", borderRadius: 10, padding: "14px 20px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <span style={{ fontSize: 13, color: "#4ade80" }}>Live offer preview</span>
+                <span style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>${editTotalOffer.toFixed(2)}</span>
+              </div>
+
+              {/* Lot details */}
+              <div style={s.section}>
+                <div style={s.sectionTitle}>Lot details</div>
+                <div className="lc-grid-2">
+                  <div>
+                    <label style={s.label}>Lot name</label>
+                    <input style={s.editInput} value={editLotName} onChange={e => setEditLotName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Seller name</label>
+                    <input style={s.editInput} value={editSellerName} onChange={e => setEditSellerName(e.target.value)} />
+                  </div>
                 </div>
-              </>
-            )}
-          </div>
+                <div className="lc-grid-3" style={{ marginTop: 12 }}>
+                  <div>
+                    <label style={s.label}>Offer %</label>
+                    <input style={s.editInput} type="number" value={editOfferPercent} onChange={e => setEditOfferPercent(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Giveaway count</label>
+                    <input style={s.editInput} type="number" min={0} value={editGiveawayCount} onChange={e => setEditGiveawayCount(Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Giveaway price each ($)</label>
+                    <input style={s.editInput} type="number" min={0} step="0.01" value={editGiveawayPrice} onChange={e => setEditGiveawayPrice(e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <label style={s.label}>Status</label>
+                  <select style={{ ...s.editInput, width: "auto" }} value={editStatus} onChange={e => setEditStatus(e.target.value)}>
+                    {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Edit cards */}
+              <div style={s.section}>
+                <div style={s.sectionTitle}>Cards in lot</div>
+                {editCards.filter(c => (c._qty || 0) > 0).map((card, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #161616", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span>
+                      <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.hero}</span>
+                      <span style={{ color: "#a78bfa", fontSize: 12 }}>{card.athlete}</span>
+                      {card.weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}
+                      <span style={{ fontSize: 11, color: "#555" }}>{card.treatment}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, color: "#555" }}>Comp $</span>
+                      <input type="number" min={0} step="0.01" value={card._comp}
+                        onChange={e => setEditCards(prev => prev.map((c, idx) => idx === i ? { ...c, _comp: e.target.value } : c))}
+                        style={s.smallInput} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <button onClick={() => setEditCards(prev => prev.map((c, idx) => idx === i ? { ...c, _qty: Math.max(0, (c._qty || 0) - 1) } : c))}
+                          style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
+                        <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{card._qty}</span>
+                        <button onClick={() => setEditCards(prev => prev.map((c, idx) => idx === i ? { ...c, _qty: (c._qty || 0) + 1 } : c))}
+                          style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
+                      </div>
+                      <button onClick={() => setEditCards(prev => prev.map((c, idx) => idx === i ? { ...c, _qty: 0 } : c))}
+                        style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "1rem" }}>✕</button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add more cards */}
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #1e1e1e" }}>
+                  <div style={s.sectionTitle}>Add more cards</div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                    {SETS.map((set, i) => (
+                      <button key={i} onClick={() => setEditSelectedSet(i)} style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${editSelectedSet === i ? "#fb923c" : "#222"}`, background: editSelectedSet === i ? "#fb923c22" : "#0f0f0f", color: editSelectedSet === i ? "#fb923c" : "#555" }}>{set.label}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                    {SUBSETS.map(sub => (
+                      <button key={sub} onClick={() => setEditActiveSubset(sub)} style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${editActiveSubset === sub ? "#a78bfa" : "#222"}`, background: editActiveSubset === sub ? "#a78bfa22" : "#0f0f0f", color: editActiveSubset === sub ? "#a78bfa" : "#555" }}>{sub}</button>
+                    ))}
+                  </div>
+                  <input style={{ ...s.editInput, marginBottom: 10 }} placeholder="🔍 Search cards to add..." value={editCardSearch} onChange={e => setEditCardSearch(e.target.value)} />
+                  <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8 }}>
+                    {!editCardSearch ? (
+                      <div style={{ padding: 16, textAlign: "center", color: "#555", fontSize: 13 }}>Type to search cards</div>
+                    ) : editFilteredCards.length === 0 ? (
+                      <div style={{ padding: 16, textAlign: "center", color: "#555", fontSize: 13 }}>No cards found</div>
+                    ) : editFilteredCards.map((card, i) => (
+                      <div key={i} onClick={() => editPickCard(card)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderBottom: "1px solid #161616", cursor: "pointer" }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#a78bfa11"}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
+                          <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
+                          <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
+                          {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
+                        </div>
+                        <span style={{ fontSize: 11, color: "#a78bfa" }}>+ Add</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Save button */}
+              <button onClick={saveEdits} disabled={savingEdit} style={{ ...s.submitBtn, width: "100%" }}>
+                {savingEdit ? "Saving changes..." : "💾 Save all changes"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
-  // NEW LOT VIEW
+  // ── NEW LOT VIEW ──────────────────────────────────────────────────────────
   if (view === "new") return (
     <div style={s.shell}>
       <style>{mobileStyles}</style>
@@ -576,7 +806,6 @@ export default function LotCompPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>New lot comp</h1>
           <button onClick={() => setView("list")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
-
         <div style={s.section}>
           <div style={s.sectionTitle}>Lot details</div>
           <div className="lc-grid-2">
@@ -589,7 +818,6 @@ export default function LotCompPage() {
             <div><label style={s.label}>Offer % for specific cards</label><input style={s.input} type="number" min={0} max={100} placeholder="e.g. 70" value={offerPercent} onChange={e => setOfferPercent(e.target.value)} /></div>
           </div>
         </div>
-
         <div style={s.section}>
           <div style={s.sectionTitle}>Add cards from database</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
@@ -607,26 +835,25 @@ export default function LotCompPage() {
               const isPicked = !!pickedCards[key];
               return (
                 <div key={i} onClick={() => pickCard(card)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616", cursor: "pointer", background: isPicked ? "#a78bfa11" : "transparent" }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
-                    <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace", flexShrink: 0 }}>{card["Card #"]}</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
+                    <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
                     <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                     {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
                     {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
                   </div>
-                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8, flexShrink: 0 }}>{isPicked ? "✓ Added" : "+ Add"}</span>
+                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8 }}>{isPicked ? "✓ Added" : "+ Add"}</span>
                 </div>
               );
             })}
           </div>
         </div>
-
         {Object.keys(pickedCards).length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Cards in lot — enter comp value per card</div>
             {Object.entries(pickedCards).map(([key, { card, qty, comp, subset }]) => (
               <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #161616", gap: 8, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
                   <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{subset}</span>
                   <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.Hero}</span>
                   <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
@@ -651,18 +878,9 @@ export default function LotCompPage() {
             ))}
             <div style={{ marginTop: 16, background: "#0f0f0f", borderRadius: 8, padding: 16 }}>
               <div className="lc-summary-3">
-                <div>
-                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>CARD COMP TOTAL</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: "#e5e5e5" }}>${cardCompTotal.toFixed(2)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>CARD OFFER ({offerPercent}%)</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: "#a78bfa" }}>${cardOfferTotal.toFixed(2)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>GIVEAWAY (fixed)</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: "#fb923c" }}>${giveawayOfferTotal.toFixed(2)}</div>
-                </div>
+                <div><div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>CARD COMP TOTAL</div><div style={{ fontSize: 20, fontWeight: 700 }}>${cardCompTotal.toFixed(2)}</div></div>
+                <div><div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>CARD OFFER ({offerPercent}%)</div><div style={{ fontSize: 20, fontWeight: 700, color: "#a78bfa" }}>${cardOfferTotal.toFixed(2)}</div></div>
+                <div><div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>GIVEAWAY (fixed)</div><div style={{ fontSize: 20, fontWeight: 700, color: "#fb923c" }}>${giveawayOfferTotal.toFixed(2)}</div></div>
               </div>
               <div style={{ borderTop: "1px solid #222", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 14, color: "#aaa", fontWeight: 600 }}>Total offer to seller</span>
@@ -671,7 +889,6 @@ export default function LotCompPage() {
             </div>
           </div>
         )}
-
         <button style={{ ...s.submitBtn, width: "100%", marginTop: 8 }} onClick={saveLot} disabled={saving}>
           {saving ? "Saving..." : "Generate lot & create seller link"}
         </button>
@@ -679,7 +896,7 @@ export default function LotCompPage() {
     </div>
   );
 
-  // LIST VIEW
+  // ── LIST VIEW ─────────────────────────────────────────────────────────────
   return (
     <div style={s.shell}>
       <style>{mobileStyles}</style>
@@ -691,7 +908,6 @@ export default function LotCompPage() {
           </div>
           <button onClick={() => setView("new")} style={s.submitBtn}>+ New lot comp</button>
         </div>
-
         {loading ? <p style={{ color: "#555" }}>Loading...</p> : lots.length === 0 ? (
           <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
             <p style={{ color: "#555", fontSize: 13 }}>No lots yet — click "New lot comp" to get started</p>
@@ -702,38 +918,21 @@ export default function LotCompPage() {
               <div key={i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#e5e5e5" }}>{lot.lot_name}</div>
-                    <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>
-                      {lot.seller_name || "No seller"} · {new Date(lot.created_at).toLocaleDateString()}
-                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>{lot.lot_name}</div>
+                    <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{lot.seller_name || "No seller"} · {new Date(lot.created_at).toLocaleDateString()}</div>
                   </div>
-                  <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: STATUS_COLORS[lot.status] + "22", color: STATUS_COLORS[lot.status], fontWeight: 600 }}>
-                    {STATUS_LABELS[lot.status]}
-                  </span>
+                  <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: STATUS_COLORS[lot.status] + "22", color: STATUS_COLORS[lot.status], fontWeight: 600 }}>{STATUS_LABELS[lot.status]}</span>
                 </div>
-
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
-                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
-                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Card comp</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>${parseFloat(lot.total_comp || "0").toFixed(2)}</div>
-                  </div>
-                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
-                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Total offer</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80" }}>${parseFloat(lot.total_offer || "0").toFixed(2)}</div>
-                  </div>
-                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}>
-                    <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Payment</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>{lot.payment_method || "—"}</div>
-                  </div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}><div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Card comp</div><div style={{ fontSize: 14, fontWeight: 700 }}>${parseFloat(lot.total_comp || "0").toFixed(2)}</div></div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}><div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Total offer</div><div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80" }}>${parseFloat(lot.total_offer || "0").toFixed(2)}</div></div>
+                  <div style={{ background: "#0f0f0f", borderRadius: 6, padding: "8px 10px" }}><div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Payment</div><div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>{lot.payment_method || "—"}</div></div>
                 </div>
-
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <button onClick={() => loadLotDetail(lot)} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 12px", cursor: "pointer" }}>View</button>
                   {confirmDeleteId === lot.id ? (
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => deleteLot(lot.id)} disabled={deletingLotId === lot.id} style={{ fontSize: 12, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>
-                        {deletingLotId === lot.id ? "..." : "Confirm"}
-                      </button>
+                      <button onClick={() => deleteLot(lot.id)} disabled={deletingLotId === lot.id} style={{ fontSize: 12, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>{deletingLotId === lot.id ? "..." : "Confirm"}</button>
                       <button onClick={() => setConfirmDeleteId(null)} style={{ fontSize: 12, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>Cancel</button>
                     </div>
                   ) : (
