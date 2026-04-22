@@ -27,7 +27,7 @@ export default function GiveawaysPage() {
     setLoading(true);
     const [{ data: gData }, { data: bData }, { data: iData }] = await Promise.all([
       supabase.from("juiced_giveaways").select("*").order("created_at", { ascending: false }),
-      supabase.from("Breaks").select("id, show_name, date").order("date", { ascending: false }).limit(100),
+      supabase.from("Breaks").select("id, box_name, date").order("date", { ascending: false }).limit(100),
       supabase.from("cardinventory").select("*").order("hero", { ascending: true }),
     ]);
     if (gData) setGiveaways(gData);
@@ -51,7 +51,7 @@ export default function GiveawaysPage() {
     const card = inventory.find(c => String(c.id) === selectedCardId);
     await supabase.from("juiced_giveaways").insert({
       break_id: selectedBreakId,
-      break_name: breakObj?.show_name || "",
+      break_name: breakObj?.box_name || "",
       card_inventory_id: selectedCardId,
       card_name: card?.hero || "",
       set_name: card?.set_name || "",
@@ -156,7 +156,7 @@ export default function GiveawaysPage() {
           <select style={s.input} value={selectedBreakId} onChange={e => setSelectedBreakId(e.target.value)}>
             <option value="">— Select a break —</option>
             {breaks.map(b => (
-              <option key={b.id} value={b.id}>{b.show_name}{b.date ? ` · ${new Date(b.date).toLocaleDateString()}` : ""}</option>
+              <option key={b.id} value={b.id}>{b.box_name}{b.date ? ` · ${new Date(b.date).toLocaleDateString()}` : ""}</option>
             ))}
           </select>
         </div>
