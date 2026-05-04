@@ -182,7 +182,6 @@ export default function Breaks() {
     setBobaFormBreak(null);
   }
 
-  // --- Calculations ---
   const totalBoxes = Object.values(boxCounts).reduce((s, v) => s + v, 0)
     + Object.values(extraBoxCounts).reduce((s, v) => s + v, 0);
 
@@ -435,7 +434,7 @@ export default function Breaks() {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => setBobaFormBreak(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
-              <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+              <a href="https://forms.gle/rictfCC5LUxrChqP7" target="_blank" style={{ background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                 Open BOBA Form ↗
               </a>
             </div>
@@ -465,7 +464,7 @@ export default function Breaks() {
           </div>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <a href="https://docs.google.com/forms/d/e/1FAIpQLSckHAsGZV8wSMW8_J4czfXGy073M-IfDf7C41AzVJYDXq8KQg/viewform" target="_blank" style={{ ...s.submitBtn, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", flex: 1, marginTop: 0 }}>
+            <a href="https://forms.gle/rictfCC5LUxrChqP7" target="_blank" style={{ ...s.submitBtn, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", flex: 1, marginTop: 0 }}>
               Open BOBA Form ↗
             </a>
             <button onClick={() => markBobaSubmitted(b.id)} disabled={markingSubmitted === b.id} style={{ ...s.submitBtn, flex: 1, background: "linear-gradient(135deg,#166534,#15803d)" }}>
@@ -530,7 +529,7 @@ export default function Breaks() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <a href={`/breaks/${b.id}`} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 12px", textDecoration: "none" }}>View</a>
+                  <a href={`/dashboard/breaks/${b.id}`} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 12px", textDecoration: "none" }}>View</a>
                   {confirmId === b.id ? (
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => deleteBreak(b.id)} disabled={deletingId === b.id} style={{ fontSize: 12, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>
@@ -560,7 +559,6 @@ export default function Breaks() {
           <button onClick={() => setView("list")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Back</button>
         </div>
 
-        {/* Break details */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Break details</div>
           <div className="breaks-grid-2">
@@ -572,95 +570,45 @@ export default function Breaks() {
             <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25.00" value={promotionTotal} onChange={e => setPromotionTotal(e.target.value)} />
           </div>
           <div>
-            <label style={s.label}>
-              Whatnot post-show total sales ($)
-              <span style={{ color: "#fb923c", marginLeft: 6 }}>— from your post-show email</span>
-            </label>
-            <input
-              style={s.input}
-              type="number" min={0} step="0.01"
-              placeholder="e.g. 25399.00 (leave blank to auto-calculate from CSV)"
-              value={manualRevenueBefore}
-              onChange={e => setManualRevenueBefore(e.target.value)}
-            />
-            <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
-              Enter the "Total Sales" figure from your Whatnot post-show email for accurate BOBA reporting
-            </div>
+            <label style={s.label}>Whatnot post-show total sales ($) <span style={{ color: "#fb923c", marginLeft: 6 }}>— from your post-show email</span></label>
+            <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 25399.00 (leave blank to auto-calculate from CSV)" value={manualRevenueBefore} onChange={e => setManualRevenueBefore(e.target.value)} />
+            <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>Enter the "Total Sales" figure from your Whatnot post-show email for accurate BOBA reporting</div>
           </div>
         </div>
 
-        {/* Box breakdown */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Box breakdown</div>
-
-          {/* Default boxes */}
           <div className="breaks-grid-4" style={{ marginBottom: extraBoxTypes.length > 0 ? 16 : 12 }}>
             {DEFAULT_BOX_TYPES.map(bt => (
               <div key={bt.key}>
                 <label style={s.label}>{bt.label}</label>
-                <input
-                  style={s.input} type="number" min={0}
-                  value={boxCounts[bt.key] || 0}
-                  onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))}
-                />
-                {marketPrices[bt.settingsKey] > 0 && (
-                  <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>
-                    Mkt: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}
-                  </div>
-                )}
+                <input style={s.input} type="number" min={0} value={boxCounts[bt.key] || 0} onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))} />
+                {marketPrices[bt.settingsKey] > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Mkt: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}</div>}
               </div>
             ))}
           </div>
-
-          {/* Extra box types from settings */}
           {extraBoxTypes.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>
-                Extra box types
-              </div>
+              <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Extra box types</div>
               <div className="breaks-extra-boxes">
                 {extraBoxTypes.map(bt => (
                   <div key={bt.id}>
                     <label style={s.label}>{bt.label}</label>
-                    <input
-                      style={s.input} type="number" min={0}
-                      value={extraBoxCounts[bt.id] || 0}
-                      onChange={e => setExtraBoxCounts(prev => ({ ...prev, [bt.id]: parseInt(e.target.value) || 0 }))}
-                    />
-                    {parseFloat(bt.price) > 0 && (
-                      <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>
-                        Mkt: ${(parseFloat(bt.price) * (extraBoxCounts[bt.id] || 0)).toFixed(2)}
-                      </div>
-                    )}
+                    <input style={s.input} type="number" min={0} value={extraBoxCounts[bt.id] || 0} onChange={e => setExtraBoxCounts(prev => ({ ...prev, [bt.id]: parseInt(e.target.value) || 0 }))} />
+                    {parseFloat(bt.price) > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Mkt: ${(parseFloat(bt.price) * (extraBoxCounts[bt.id] || 0)).toFixed(2)}</div>}
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: "#555", marginTop: 8 }}>
-                To add/remove box types, go to <a href="/settings" style={{ color: "#fb923c", textDecoration: "none" }}>Settings → Extra box types</a>
-              </div>
+              <div style={{ fontSize: 11, color: "#555", marginTop: 8 }}>To add/remove box types, go to <a href="/settings" style={{ color: "#fb923c", textDecoration: "none" }}>Settings → Extra box types</a></div>
             </div>
           )}
-
-          {extraBoxTypes.length === 0 && (
-            <div style={{ fontSize: 11, color: "#444", marginBottom: 12 }}>
-              Need a different box type? Add it in <a href="/settings" style={{ color: "#555", textDecoration: "none" }}>Settings → Extra box types</a>
-            </div>
-          )}
-
-          {/* Totals */}
+          {extraBoxTypes.length === 0 && <div style={{ fontSize: 11, color: "#444", marginBottom: 12 }}>Need a different box type? Add it in <a href="/settings" style={{ color: "#555", textDecoration: "none" }}>Settings → Extra box types</a></div>}
           <div className="breaks-stat-2">
-            <div style={s.stat}>
-              <div style={s.statLabel}>Total boxes</div>
-              <div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div>
-            </div>
-            <div style={s.stat}>
-              <div style={s.statLabel}>Market value</div>
-              <div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div>
-            </div>
+            <div style={s.stat}><div style={s.statLabel}>Total boxes</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div></div>
+            <div style={s.stat}><div style={s.statLabel}>Market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
           </div>
         </div>
 
-        {/* Cards used */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Cards used in this break</div>
           <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Search your card inventory — selected cards will be deducted when break is saved</p>
@@ -709,7 +657,6 @@ export default function Breaks() {
           )}
         </div>
 
-        {/* Upload CSV */}
         <div style={s.section}>
           <div style={s.sectionTitle}>Upload Whatnot CSV</div>
           <label style={{ display: "block", border: "1px dashed #333", borderRadius: 8, padding: 24, textAlign: "center", cursor: "pointer", background: "#0f0f0f" }}>
@@ -741,7 +688,6 @@ export default function Breaks() {
           )}
         </div>
 
-        {/* Supply estimates */}
         {csvData.length > 0 && Object.keys(supplyEstimates).length > 0 && (
           <div style={s.section}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -799,7 +745,6 @@ export default function Breaks() {
           </div>
         )}
 
-        {/* Financials */}
         {csvData.length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>💰 Break financials & IMC split</div>

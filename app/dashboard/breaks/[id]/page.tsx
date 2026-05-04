@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 const WHATNOT_FEE = 0.112;
 
@@ -13,20 +14,23 @@ export default function BreakDetailPage() {
   const [brk, setBrk] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [chasers, setChasers] = useState<any[]>([]);
+  const [juicedGiveaways, setJuicedGiveaways] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [orderSearch, setOrderSearch] = useState("");
 
   useEffect(() => {
     if (!id) return;
     async function load() {
-      const [brkRes, ordersRes, chasersRes] = await Promise.all([
+      const [brkRes, ordersRes, chasersRes, juicedRes] = await Promise.all([
         supabase.from("Breaks").select("*").eq("id", id).single(),
         supabase.from("BreakOrders").select("*").eq("break_id", id).order("price", { ascending: false }),
         supabase.from("BreakChasers").select("*").eq("break_id", id),
+        supabase.from("juiced_giveaways").select("*").eq("break_id", id),
       ]);
       if (brkRes.data) setBrk(brkRes.data);
       if (ordersRes.data) setOrders(ordersRes.data);
       if (chasersRes.data) setChasers(chasersRes.data);
+      if (juicedRes.data) setJuicedGiveaways(juicedRes.data);
       setLoading(false);
     }
     load();
@@ -95,6 +99,11 @@ export default function BreakDetailPage() {
   });
   const topBuyers = Object.entries(buyerMap).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
 
+  // Juiced giveaway totals
+  const juicedCount = juicedGiveaways.reduce((s, g) => s + (g.quantity || 0), 0);
+  const juicedCostBasis = juicedGiveaways.reduce((s, g) => s + parseFloat(g.cost_basis || "0"), 0);
+  const juicedFMV = juicedGiveaways.reduce((s, g) => s + parseFloat(g.fmv || "0"), 0);
+
   return (
     <div style={s.shell}>
       <style>{mobileStyles}</style>
@@ -102,21 +111,46 @@ export default function BreakDetailPage() {
 
         {/* Header */}
         <div style={{ marginBottom: 24 }}>
-          <button onClick={() => router.push("/breaks")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer", marginBottom: 12 }}>← Back to breaks</button>
+          <button onClick={() => router.push("/dashboard/breaks")} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer", marginBottom: 12 }}>← Back to breaks</button>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "#e5e5e5" }}>{brk.box_name || "Break"}</h1>
               <p style={{ fontSize: 13, color: "#555", marginTop: 4 }}>{brk.date} · {brk.spots_sold} spots · {brk.free_giveaways} giveaways</p>
             </div>
-            {brk.boba_submitted ? (
-              <span style={{ fontSize: 12, padding: "6px 14px", borderRadius: 20, background: "#16653422", color: "#4ade80", fontWeight: 600 }}>✓ BOBA Submitted</span>
-            ) : (
-              <span style={{ fontSize: 12, padding: "6px 14px", borderRadius: 20, background: "#f8717122", color: "#f87171", fontWeight: 600 }}>✗ Not submitted</span>
-            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {brk.boba_submitted ? (
+                <span style={{ fontSize: 12, padding: "6px 14px", borderRadius: 20, background: "#16653422", color: "#4ade80", fontWeight: 600 }}>✓ BOBA Submitted</span>
+              ) : (
+                <a href="https://forms.gle/rictfCC5LUxrChqP7" target="_blank" style={{ fontSize: 12, padding: "6px 14px", borderRadius: 20, background: "#fb923c22", color: "#fb923c", fontWeight: 600, textDecoration: "none", border: "1px solid #fb923c44" }}>
+                  📋 Submit BOBA ↗
+                </a>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Key stats — 4 col desktop, 2 col mobile */}
+        {/* Juiced giveaways banner */}
+        {juicedCount > 0 ? (
+          <div style={{ background: "#1a1500", border: "1px solid #fbbf2444", borderRadius: 10, padding: "14px 18px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24" }}>🎁 {juicedCount} juiced giveaway{juicedCount !== 1 ? "s" : ""} this break</span>
+              <span style={{ fontSize: 12, color: "#fb923c" }}>Cost basis: <strong>${juicedCostBasis.toFixed(2)}</strong></span>
+              <span style={{ fontSize: 12, color: "#4ade80" }}>FMV: <strong>${juicedFMV.toFixed(2)}</strong></span>
+            </div>
+            <Link href="/dashboard/giveaways" style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, background: "#fbbf2422", color: "#fbbf24", border: "1px solid #fbbf2444", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
+              View in Giveaways ↗
+            </Link>
+          </div>
+        ) : (
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 18px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <span style={{ fontSize: 13, color: "#555" }}>🎁 No juiced giveaways logged for this break</span>
+            <Link href={`/dashboard/giveaways`} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, background: "#a78bfa22", color: "#a78bfa", border: "1px solid #a78bfa44", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
+              + Log Juiced Giveaway
+            </Link>
+          </div>
+        )}
+
+        {/* Key stats */}
         <div className="detail-grid-4">
           <div style={s.statCard}>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Revenue</div>
@@ -194,7 +228,39 @@ export default function BreakDetailPage() {
           </div>
         </div>
 
-        {/* Chasers — mobile card layout instead of table */}
+        {/* Juiced giveaways detail */}
+        {juicedGiveaways.length > 0 && (
+          <div style={s.section}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+              <div style={s.sectionTitle}>🎁 Juiced giveaways</div>
+              <Link href="/dashboard/giveaways" style={{ fontSize: 12, color: "#a78bfa", textDecoration: "none" }}>View all ↗</Link>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {juicedGiveaways.map((g, i) => (
+                <div key={i} style={{ background: "#0f0f0f", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{g.card_name}</span>
+                    <span style={{ fontSize: 11, color: "#555" }}>{g.set_name}{g.parallel ? ` · ${g.parallel}` : ""}</span>
+                    <span style={{ fontSize: 11, color: "#a78bfa" }}>×{g.quantity}</span>
+                    {g.notes && <span style={{ fontSize: 11, color: "#444" }}>{g.notes}</span>}
+                  </div>
+                  <div style={{ display: "flex", gap: 16 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 10, color: "#555" }}>Cost Basis</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#fb923c" }}>${parseFloat(g.cost_basis || "0").toFixed(2)}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 10, color: "#555" }}>FMV</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#4ade80" }}>${parseFloat(g.fmv || "0").toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Chasers */}
         {chasers.length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>🃏 Cards used in this break</div>
@@ -235,7 +301,7 @@ export default function BreakDetailPage() {
           </div>
         )}
 
-        {/* All orders — mobile card layout */}
+        {/* All orders */}
         <div style={s.section}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
             <div style={s.sectionTitle}>📋 All orders ({orders.length})</div>
