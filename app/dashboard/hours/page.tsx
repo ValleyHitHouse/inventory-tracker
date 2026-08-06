@@ -18,7 +18,7 @@ export default function BreakShipmentsPage() {
   const [breaks, setBreaks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [shipperName, setShipperName] = useState("");
+  const [loggedInName, setLoggedInName] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [isShipper, setIsShipper] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -27,6 +27,7 @@ export default function BreakShipmentsPage() {
   const [shipDate, setShipDate] = useState(new Date().toISOString().split("T")[0]);
   const [cases, setCases] = useState("1");
   const [notes, setNotes] = useState("");
+  const [selectedShipper, setSelectedShipper] = useState("Caitlin");
 
   useEffect(() => {
     const cookies = document.cookie.split(";").reduce((acc, c) => {
@@ -34,11 +35,13 @@ export default function BreakShipmentsPage() {
       acc[k] = v;
       return acc;
     }, {} as Record<string, string>);
-    const name = cookies["vhh-user"] || "";
+    const name = decodeURIComponent(cookies["vhh-user"] || "");
     const role = cookies["vhh-role"] || "";
-    setShipperName(name);
+    setLoggedInName(name);
     setIsAdmin(role === "admin");
-    setIsShipper(Object.keys(SHIPPER_RATES).includes(name));
+    const shipper = Object.keys(SHIPPER_RATES).includes(name);
+    setIsShipper(shipper);
+    if (shipper) setSelectedShipper(name);
     loadData(name, role);
   }, []);
 
@@ -55,20 +58,23 @@ export default function BreakShipmentsPage() {
     setLoading(false);
   }
 
-  function getPayAmount(name: string, caseValue: string): number {
-    const rates = SHIPPER_RATES[name];
+  function getPayAmount(shipperName: string, caseValue: string): number {
+    const rates = SHIPPER_RATES[shipperName];
     if (!rates) return 0;
     return rates[caseValue as keyof typeof rates] || 0;
   }
 
+  const activeShipper = isAdmin ? selectedShipper : loggedInName;
+  const previewPay = getPayAmount(activeShipper, cases);
+
   async function submitShipment() {
     if (!selectedBreak || !shipDate) return alert("Please select a break and date");
     setSubmitting(true);
-    const payAmount = getPayAmount(shipperName, cases);
+    const payAmount = getPayAmount(activeShipper, cases);
     const breakRecord = breaks.find(b => String(b.id) === selectedBreak);
     await supabase.from("break_shipments").insert({
-      shipper_name: shipperName,
-      shipper_username: shipperName.toLowerCase(),
+      shipper_name: activeShipper,
+      shipper_username: activeShipper.toLowerCase(),
       break_name: breakRecord ? `${breakRecord.box_name || "Break"} — ${breakRecord.date}` : selectedBreak,
       ship_date: shipDate,
       cases,
@@ -77,14 +83,14 @@ export default function BreakShipmentsPage() {
       paid: false,
       notes: notes || null,
     });
-    await loadData(shipperName, isAdmin ? "admin" : "employee");
+    await loadData(loggedInName, isAdmin ? "admin" : "employee");
     setSubmitting(false);
     setShowForm(false);
     setSelectedBreak(""); setCases("1"); setNotes("");
     setShipDate(new Date().toISOString().split("T")[0]);
   }
 
-  const myShipments = isAdmin ? shipments : shipments.filter(s => s.shipper_name === shipperName);
+  const myShipments = isAdmin ? shipments : shipments.filter(s => s.shipper_name === loggedInName);
   const totalEarned = myShipments.reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
   const totalUnpaid = myShipments.filter(sh => !sh.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
   const totalPaid = myShipments.filter(sh => sh.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
@@ -127,14 +133,12 @@ export default function BreakShipmentsPage() {
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Break Shipments</h1>
             <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
-              {isAdmin ? "All shipper submissions" : `Your shipments — ${shipperName}`}
+              {isAdmin ? "All shipper submissions" : `Your shipments — ${loggedInName}`}
             </p>
           </div>
-          {(isShipper || isAdmin) && (
-            <button onClick={() => setShowForm(!showForm)} style={s.submitBtn}>
-              {showForm ? "Cancel" : "+ Log shipment"}
-            </button>
-          )}
+          <button onClick={() => setShowForm(!showForm)} style={s.submitBtn}>
+            {showForm ? "Cancel" : "+ Log shipment"}
+          </button>
         </div>
 
         {/* Stats */}
@@ -157,14 +161,14 @@ export default function BreakShipmentsPage() {
         </div>
 
         {/* Pay rate info for shippers */}
-        {isShipper && !isAdmin && SHIPPER_RATES[shipperName] && (
+        {isShipper && !isAdmin && SHIPPER_RATES[loggedInName] && (
           <div style={{ ...s.section, borderColor: "#a78bfa33" }}>
             <div style={s.sectionTitle}>💰 Your pay rates</div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               {CASE_OPTIONS.map(opt => (
                 <div key={opt.value} style={{ background: "#0f0f0f", borderRadius: 8, padding: "10px 16px", textAlign: "center" }}>
                   <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>{opt.label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#a78bfa" }}>${SHIPPER_RATES[shipperName][opt.value as keyof typeof SHIPPER_RATES[string]]}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#a78bfa" }}>${SHIPPER_RATES[loggedInName][opt.value as keyof typeof SHIPPER_RATES[string]]}</div>
                 </div>
               ))}
             </div>
@@ -175,6 +179,19 @@ export default function BreakShipmentsPage() {
         {showForm && (
           <div style={{ ...s.section, borderColor: "#7c3aed44" }}>
             <div style={s.sectionTitle}>Log shipment</div>
+
+            {/* Admin shipper selector */}
+            {isAdmin && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={s.label}>Shipper</label>
+                <select style={s.input} value={selectedShipper} onChange={e => setSelectedShipper(e.target.value)}>
+                  {Object.keys(SHIPPER_RATES).map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div style={{ marginBottom: 12 }}>
               <label style={s.label}>Break</label>
               <select style={s.input} value={selectedBreak} onChange={e => setSelectedBreak(e.target.value)}>
@@ -186,6 +203,7 @@ export default function BreakShipmentsPage() {
                 ))}
               </select>
             </div>
+
             <div className="bs-form-grid">
               <div>
                 <label style={s.label}>Ship date</label>
@@ -200,27 +218,20 @@ export default function BreakShipmentsPage() {
                 </select>
               </div>
             </div>
-            {isAdmin && (
-              <div style={{ marginBottom: 12 }}>
-                <label style={s.label}>Shipper</label>
-                <select style={s.input} value={shipperName} onChange={e => setShipperName(e.target.value)}>
-                  {Object.keys(SHIPPER_RATES).map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+
             <div style={{ marginBottom: 14 }}>
               <label style={s.label}>Notes (optional)</label>
               <input style={s.input} placeholder="Any additional details" value={notes} onChange={e => setNotes(e.target.value)} />
             </div>
-            {cases && (
-              <div style={{ background: "#0f0a1a", border: "1px solid #a78bfa33", borderRadius: 8, padding: "10px 14px", marginBottom: 14 }}>
-                <span style={{ fontSize: 13, color: "#a78bfa" }}>
-                  Pay for this shipment: <strong>${getPayAmount(shipperName, cases).toFixed(2)}</strong>
-                </span>
-              </div>
-            )}
+
+            {/* Pay preview */}
+            <div style={{ background: previewPay > 0 ? "#0f0a1a" : "#0f0f0f", border: `1px solid ${previewPay > 0 ? "#a78bfa44" : "#1e1e1e"}`, borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+              <span style={{ fontSize: 13, color: "#a78bfa" }}>
+                Pay for this shipment: <strong style={{ fontSize: 18, color: previewPay > 0 ? "#a78bfa" : "#555" }}>${previewPay.toFixed(2)}</strong>
+                {previewPay > 0 && <span style={{ fontSize: 11, color: "#555", marginLeft: 8 }}>for {activeShipper}</span>}
+              </span>
+            </div>
+
             <button style={{ ...s.submitBtn, width: "100%" }} onClick={submitShipment} disabled={submitting}>
               {submitting ? "Submitting..." : "Submit shipment"}
             </button>
@@ -242,7 +253,7 @@ export default function BreakShipmentsPage() {
                     <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5", marginBottom: 4 }}>{sh.break_name}</div>
                     <div style={{ fontSize: 12, color: "#555" }}>
                       {sh.ship_date} · {sh.cases === "3plus" ? "3+ Cases" : `${sh.cases} Case${sh.cases === "1" ? "" : "s"}`}
-                      {isAdmin && <span style={{ color: "#a78bfa", marginLeft: 8 }}>· {sh.shipper_name}</span>}
+                      {isAdmin && <span style={{ color: "#38bdf8", marginLeft: 8 }}>· {sh.shipper_name}</span>}
                     </div>
                     {sh.notes && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>{sh.notes}</div>}
                   </div>
