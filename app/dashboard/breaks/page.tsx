@@ -81,16 +81,30 @@ function calcSupplyEstimates(csvData: any[]) {
   return estimates;
 }
 
-function calcCommission(percentToMarket: number, valleyTake: number, breakerName: string, commissionEmployees: string[]): number {
-  if (!commissionEmployees.includes(breakerName)) return 0;
-  if (percentToMarket <= 0) return 0;
+type CommissionTier = { minPct: number; rate: number };
+
+const DEFAULT_COMMISSION_TIERS: CommissionTier[] = [
+  { minPct: 0, rate: 30 },
+  { minPct: 120, rate: 35 },
+  { minPct: 140, rate: 40 },
+  { minPct: 160, rate: 50 },
+  { minPct: 180, rate: 60 },
+];
+
+// Returns the commission rate (as a percent, e.g. 40) for a given % to market,
+// picking the highest tier whose threshold is met.
+function rateForPct(tiers: CommissionTier[] | null, percentToMarket: number): number {
+  if (!tiers || tiers.length === 0 || percentToMarket <= 0) return 0;
+  const sorted = [...tiers]
+    .filter(t => !isNaN(Number(t.minPct)) && !isNaN(Number(t.rate)))
+    .sort((a, b) => Number(a.minPct) - Number(b.minPct));
   let rate = 0;
-  if (percentToMarket < 120) rate = 0.30;
-  else if (percentToMarket < 140) rate = 0.35;
-  else if (percentToMarket < 160) rate = 0.40;
-  else if (percentToMarket < 180) rate = 0.50;
-  else rate = 0.60;
-  return valleyTake * rate;
+  for (const t of sorted) { if (percentToMarket >= Number(t.minPct)) rate = Number(t.rate); }
+  return rate;
+}
+
+function calcCommission(percentToMarket: number, valleyTake: number, tiers: CommissionTier[] | null): number {
+  return valleyTake * (rateForPct(tiers, percentToMarket) / 100);
 }
 
 interface ExtraBoxType {
@@ -103,6 +117,7 @@ export default function Breaks() {
   const [breaks, setBreaks] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [commissionEmployees, setCommissionEmployees] = useState<string[]>([]);
+  const [commissionTiers, setCommissionTiers] = useState<Record<string, CommissionTier[]>>({});
   const [view, setView] = useState<"list" | "new">("list");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [boxName, setBoxName] = useState("");
@@ -150,10 +165,19 @@ export default function Breaks() {
   }
 
   async function loadEmployees() {
-    const { data } = await supabase.from("employees").select("name, commission_based").eq("active", true).order("name");
+    const { data } = await supabase.from("employees").select("name, commission_based, commission_tiers").eq("active", true).order("name");
     if (data) {
       setEmployees(data);
       setCommissionEmployees(data.filter((e: any) => e.commission_based).map((e: any) => e.name));
+      const tiersMap: Record<string, CommissionTier[]> = {};
+      for (const e of data as any[]) {
+        if (e.commission_based) {
+          tiersMap[e.name] = Array.isArray(e.commission_tiers) && e.commission_tiers.length > 0
+            ? e.commission_tiers
+            : DEFAULT_COMMISSION_TIERS;
+        }
+      }
+      setCommissionTiers(tiersMap);
     }
   }
 
@@ -246,7 +270,8 @@ export default function Breaks() {
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
   const totalSupplyCost = imcSupplyCost + valleySupplyCost;
   const supplyDeductionPct = marketPrices["breaker_supply_deduction_pct"] ?? 25;
-  const grossCommission = calcCommission(percentToMarket, valleyTake, breaker, commissionEmployees);
+  const breakerTiers = commissionEmployees.includes(breaker) ? (commissionTiers[breaker] || DEFAULT_COMMISSION_TIERS) : null;
+  const grossCommission = calcCommission(percentToMarket, valleyTake, breakerTiers);
   const commissionSupplyDeduction = grossCommission > 0 ? totalSupplyCost * (supplyDeductionPct / 100) : 0;
   const commissionAmount = Math.max(0, grossCommission - commissionSupplyDeduction);
 
@@ -852,7 +877,7 @@ export default function Breaks() {
                   <div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: "#a78bfa" }}>${commissionAmount.toFixed(2)}</div>
                     <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                      {percentToMarket < 120 ? "30%" : percentToMarket < 140 ? "35%" : percentToMarket < 160 ? "40%" : percentToMarket < 180 ? "50%" : "60%"} of Valley's ${valleyTake.toFixed(2)}
+                      {rateForPct(breakerTiers, percentToMarket)}% of Valley's ${valleyTake.toFixed(2)}
                       {commissionSupplyDeduction > 0 && ` = $${grossCommission.toFixed(2)}`}
                     </div>
                     {commissionSupplyDeduction > 0 && (

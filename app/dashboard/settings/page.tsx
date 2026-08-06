@@ -15,6 +15,18 @@ interface ExtraBoxType {
   price: string;
 }
 
+// Editor rows keep values as strings so inputs behave; converted to numbers on save.
+type TierRow = { minPct: string; rate: string };
+type CommBreaker = { id: number; name: string };
+
+const DEFAULT_TIER_ROWS: TierRow[] = [
+  { minPct: "0", rate: "30" },
+  { minPct: "120", rate: "35" },
+  { minPct: "140", rate: "40" },
+  { minPct: "160", rate: "50" },
+  { minPct: "180", rate: "60" },
+];
+
 export default function SettingsPage() {
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [extraBoxes, setExtraBoxes] = useState<ExtraBoxType[]>([]);
@@ -24,6 +36,13 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Per-breaker commission structures
+  const [commBreakers, setCommBreakers] = useState<CommBreaker[]>([]);
+  const [selectedBreaker, setSelectedBreaker] = useState("");
+  const [tierEdits, setTierEdits] = useState<Record<string, TierRow[]>>({});
+  const [savingComm, setSavingComm] = useState(false);
+  const [savedComm, setSavedComm] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -36,10 +55,60 @@ export default function SettingsPage() {
           try { setExtraBoxes(JSON.parse(map.extra_box_types)); } catch {}
         }
       }
+      const { data: emps } = await supabase
+        .from("employees")
+        .select("id, name, commission_tiers")
+        .eq("commission_based", true)
+        .eq("active", true)
+        .order("name");
+      if (emps) {
+        setCommBreakers(emps.map((e: any) => ({ id: e.id, name: e.name })));
+        const edits: Record<string, TierRow[]> = {};
+        for (const e of emps as any[]) {
+          const tiers = Array.isArray(e.commission_tiers) && e.commission_tiers.length > 0
+            ? e.commission_tiers.map((t: any) => ({ minPct: String(t.minPct ?? 0), rate: String(t.rate ?? 0) }))
+            : DEFAULT_TIER_ROWS.map(t => ({ ...t }));
+          edits[e.name] = tiers;
+        }
+        setTierEdits(edits);
+        if (emps.length > 0) setSelectedBreaker(emps[0].name);
+      }
       setLoading(false);
     }
     load();
   }, []);
+
+  function updateTier(name: string, idx: number, field: keyof TierRow, value: string) {
+    setTierEdits(prev => ({
+      ...prev,
+      [name]: (prev[name] || []).map((t, i) => i === idx ? { ...t, [field]: value } : t),
+    }));
+  }
+
+  function addTier(name: string) {
+    setTierEdits(prev => ({ ...prev, [name]: [...(prev[name] || []), { minPct: "", rate: "" }] }));
+  }
+
+  function removeTier(name: string, idx: number) {
+    setTierEdits(prev => ({ ...prev, [name]: (prev[name] || []).filter((_, i) => i !== idx) }));
+  }
+
+  function resetTiers(name: string) {
+    setTierEdits(prev => ({ ...prev, [name]: DEFAULT_TIER_ROWS.map(t => ({ ...t })) }));
+  }
+
+  async function saveCommission() {
+    setSavingComm(true);
+    for (const b of commBreakers) {
+      const tiers = (tierEdits[b.name] || [])
+        .filter(t => t.rate !== "" || t.minPct !== "")
+        .map(t => ({ minPct: parseFloat(t.minPct) || 0, rate: parseFloat(t.rate) || 0 }))
+        .sort((a, b) => a.minPct - b.minPct);
+      await supabase.from("employees").update({ commission_tiers: tiers }).eq("id", b.id);
+    }
+    setSavingComm(false); setSavedComm(true);
+    setTimeout(() => setSavedComm(false), 2000);
+  }
 
   function addExtraBox() {
     if (!newBoxLabel.trim()) return;
@@ -152,6 +221,75 @@ export default function SettingsPage() {
               </div>
               <p style={{ fontSize: 11, color: "#444", marginTop: 8 }}>Applies only to breakers marked commission-based. Existing saved breaks are not changed.</p>
             </div>
+          )}
+        </div>
+
+        {/* Commission structures per breaker */}
+        <div style={s.section}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+            <div style={{ ...s.sectionTitle, marginBottom: 0 }}>📊 Commission structures</div>
+            <button onClick={saveCommission} disabled={savingComm || commBreakers.length === 0}
+              style={{ background: savedComm ? "#166534" : "#a78bfa22", border: "1px solid #a78bfa44", color: savedComm ? "#4ade80" : "#a78bfa", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              {savingComm ? "Saving..." : savedComm ? "✓ Saved!" : "Save commission structures"}
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>
+            Set each breaker&apos;s commission tiers. The rate is the % of Valley&apos;s take they earn, based on the break&apos;s % to market — the highest tier whose threshold is met applies.
+          </p>
+
+          {loading ? <p style={{ color: "#555" }}>Loading...</p> : commBreakers.length === 0 ? (
+            <p style={{ fontSize: 13, color: "#444" }}>
+              No commission-based breakers yet. Mark an employee as commission-based on the Employees page first.
+            </p>
+          ) : (
+            <>
+              <label style={s.label}>Breaker</label>
+              <select
+                style={{ ...s.input, marginBottom: 16, cursor: "pointer" }}
+                value={selectedBreaker}
+                onChange={e => setSelectedBreaker(e.target.value)}
+              >
+                {commBreakers.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+              </select>
+
+              {selectedBreaker && (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 40px", gap: 8, marginBottom: 6, fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px" }}>
+                    <div>% to market (from)</div>
+                    <div>Commission %</div>
+                    <div></div>
+                  </div>
+                  {(tierEdits[selectedBreaker] || []).map((t, idx) => (
+                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 40px", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ color: "#555", fontSize: 12 }}>≥</span>
+                        <input style={s.input} type="number" min={0} step="1" placeholder="0"
+                          value={t.minPct}
+                          onChange={e => updateTier(selectedBreaker, idx, "minPct", e.target.value)} />
+                        <span style={{ color: "#555", fontSize: 12 }}>%</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input style={s.input} type="number" min={0} max={100} step="1" placeholder="0"
+                          value={t.rate}
+                          onChange={e => updateTier(selectedBreaker, idx, "rate", e.target.value)} />
+                        <span style={{ color: "#555", fontSize: 12 }}>%</span>
+                      </div>
+                      <button onClick={() => removeTier(selectedBreaker, idx)}
+                        style={{ background: "#7f1d1d22", border: "1px solid #7f1d1d", color: "#f87171", borderRadius: 6, padding: "6px 0", cursor: "pointer", fontSize: 14 }}>×</button>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    <button onClick={() => addTier(selectedBreaker)}
+                      style={{ background: "none", border: "1px dashed #333", color: "#777", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>+ Add tier</button>
+                    <button onClick={() => resetTiers(selectedBreaker)}
+                      style={{ background: "none", border: "1px solid #333", color: "#555", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Reset to default</button>
+                  </div>
+                  <p style={{ fontSize: 11, color: "#444", marginTop: 12 }}>
+                    Example: a tier of ≥140% at 40% means any break from 140% to market up to the next tier pays 40% of Valley&apos;s take. Remember to hit &quot;Save commission structures&quot; above. Existing saved breaks are not recalculated.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
