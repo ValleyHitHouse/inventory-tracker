@@ -17,6 +17,7 @@ export default function BreakDetailPage() {
   const [juicedGiveaways, setJuicedGiveaways] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [orderSearch, setOrderSearch] = useState("");
+  const [markingPaid, setMarkingPaid] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -35,6 +36,20 @@ export default function BreakDetailPage() {
     }
     load();
   }, [id]);
+
+  async function markCommissionPaid() {
+    setMarkingPaid(true);
+    await supabase.from("Breaks").update({ commission_paid: true, commission_paid_at: new Date().toISOString() }).eq("id", id);
+    setBrk((prev: any) => ({ ...prev, commission_paid: true, commission_paid_at: new Date().toISOString() }));
+    setMarkingPaid(false);
+  }
+
+  async function unmarkCommissionPaid() {
+    setMarkingPaid(true);
+    await supabase.from("Breaks").update({ commission_paid: false, commission_paid_at: null }).eq("id", id);
+    setBrk((prev: any) => ({ ...prev, commission_paid: false, commission_paid_at: null }));
+    setMarkingPaid(false);
+  }
 
   const mobileStyles = `
     .detail-grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
@@ -79,6 +94,7 @@ export default function BreakDetailPage() {
   const whatnotFees = revenueBeforeFees * WHATNOT_FEE;
   const marketValue = parseFloat(brk.market_value || "0");
   const percentToMarket = marketValue > 0 ? (revenueBeforeFees / marketValue) * 100 : 0;
+  const commissionAmount = parseFloat(brk.commission_amount || "0");
 
   const payingOrders = orders.filter(o => parseFloat(o.price || "0") > 0 && !o.cancelled);
   const freeOrders = orders.filter(o => parseFloat(o.price || "0") === 0);
@@ -99,7 +115,6 @@ export default function BreakDetailPage() {
   });
   const topBuyers = Object.entries(buyerMap).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
 
-  // Juiced giveaway totals
   const juicedCount = juicedGiveaways.reduce((s, g) => s + (g.quantity || 0), 0);
   const juicedCostBasis = juicedGiveaways.reduce((s, g) => s + parseFloat(g.cost_basis || "0"), 0);
   const juicedFMV = juicedGiveaways.reduce((s, g) => s + parseFloat(g.fmv || "0"), 0);
@@ -115,7 +130,10 @@ export default function BreakDetailPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "#e5e5e5" }}>{brk.box_name || "Break"}</h1>
-              <p style={{ fontSize: 13, color: "#555", marginTop: 4 }}>{brk.date} · {brk.spots_sold} spots · {brk.free_giveaways} giveaways</p>
+              <p style={{ fontSize: 13, color: "#555", marginTop: 4 }}>
+                {brk.date} · {brk.spots_sold} spots · {brk.free_giveaways} giveaways
+                {brk.breaker && <span style={{ color: "#a78bfa", marginLeft: 8 }}>· 🎙️ {brk.breaker}</span>}
+              </p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               {brk.boba_submitted ? (
@@ -128,6 +146,40 @@ export default function BreakDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Commission banner */}
+        {commissionAmount > 0 && (
+          <div style={{ background: "#0f0a1a", border: "1px solid #a78bfa44", borderRadius: 10, padding: "14px 18px", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: "#a78bfa", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>
+                  💼 {brk.breaker} commission · {percentToMarket.toFixed(1)}% to market
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#a78bfa" }}>${commissionAmount.toFixed(2)}</div>
+                <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                  Valley take: ${valleyTake.toFixed(2)} · Valley net after commission: ${(valleyTake - commissionAmount).toFixed(2)}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: brk.commission_paid ? "#4ade8022" : "#f8717122", color: brk.commission_paid ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                  {brk.commission_paid ? "✓ Paid" : "Unpaid"}
+                </span>
+                {brk.commission_paid ? (
+                  <button onClick={unmarkCommissionPaid} disabled={markingPaid} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+                    Undo
+                  </button>
+                ) : (
+                  <button onClick={markCommissionPaid} disabled={markingPaid} style={{ fontSize: 12, background: "#a78bfa22", border: "1px solid #a78bfa44", color: "#a78bfa", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontWeight: 600 }}>
+                    {markingPaid ? "..." : "Mark as paid"}
+                  </button>
+                )}
+                {brk.commission_paid_at && (
+                  <div style={{ fontSize: 11, color: "#555" }}>Paid {new Date(brk.commission_paid_at).toLocaleDateString()}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Juiced giveaways banner */}
         {juicedCount > 0 ? (
@@ -144,7 +196,7 @@ export default function BreakDetailPage() {
         ) : (
           <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 18px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
             <span style={{ fontSize: 13, color: "#555" }}>🎁 No juiced giveaways logged for this break</span>
-            <Link href={`/dashboard/giveaways`} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, background: "#a78bfa22", color: "#a78bfa", border: "1px solid #a78bfa44", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
+            <Link href="/dashboard/giveaways" style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, background: "#a78bfa22", color: "#a78bfa", border: "1px solid #a78bfa44", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
               + Log Juiced Giveaway
             </Link>
           </div>
@@ -224,6 +276,12 @@ export default function BreakDetailPage() {
             <div style={{ background: "#0f0f0f", border: "1px solid #38bdf833", borderRadius: 10, padding: 16, textAlign: "center" }}>
               <div style={{ fontSize: 11, color: "#38bdf8", marginBottom: 4 }}>VALLEY TAKE (30%)</div>
               <div style={{ fontSize: 26, fontWeight: 800, color: "#38bdf8" }}>${valleyTake.toFixed(2)}</div>
+              {commissionAmount > 0 && (
+                <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 6 }}>
+                  Commission: -${commissionAmount.toFixed(2)}<br />
+                  <span style={{ color: "#38bdf8", fontWeight: 700 }}>Net: ${(valleyTake - commissionAmount).toFixed(2)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

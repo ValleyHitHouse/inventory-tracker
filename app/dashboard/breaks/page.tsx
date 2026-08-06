@@ -81,6 +81,18 @@ function calcSupplyEstimates(csvData: any[]) {
   return estimates;
 }
 
+function calcCommission(percentToMarket: number, valleyTake: number, breakerName: string, commissionEmployees: string[]): number {
+  if (!commissionEmployees.includes(breakerName)) return 0;
+  if (percentToMarket <= 0) return 0;
+  let rate = 0;
+  if (percentToMarket < 120) rate = 0.30;
+  else if (percentToMarket < 140) rate = 0.35;
+  else if (percentToMarket < 160) rate = 0.40;
+  else if (percentToMarket < 180) rate = 0.50;
+  else rate = 0.60;
+  return valleyTake * rate;
+}
+
 interface ExtraBoxType {
   id: string;
   label: string;
@@ -89,9 +101,12 @@ interface ExtraBoxType {
 
 export default function Breaks() {
   const [breaks, setBreaks] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [commissionEmployees, setCommissionEmployees] = useState<string[]>([]);
   const [view, setView] = useState<"list" | "new">("list");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [boxName, setBoxName] = useState("");
+  const [breaker, setBreaker] = useState("");
   const [boxCounts, setBoxCounts] = useState<Record<string, number>>({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
   const [extraBoxTypes, setExtraBoxTypes] = useState<ExtraBoxType[]>([]);
   const [extraBoxCounts, setExtraBoxCounts] = useState<Record<string, number>>({});
@@ -117,7 +132,7 @@ export default function Breaks() {
   const [inventoryPrices, setInventoryPrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    loadBreaks(); loadCardInventory(); loadInventoryPrices(); loadMarketPrices();
+    loadBreaks(); loadCardInventory(); loadInventoryPrices(); loadMarketPrices(); loadEmployees();
   }, []);
 
   useEffect(() => {
@@ -132,6 +147,14 @@ export default function Breaks() {
   async function loadBreaks() {
     const { data } = await supabase.from("Breaks").select("*").order("date", { ascending: false });
     if (data) setBreaks(data);
+  }
+
+  async function loadEmployees() {
+    const { data } = await supabase.from("employees").select("name, commission_based").eq("active", true).order("name");
+    if (data) {
+      setEmployees(data);
+      setCommissionEmployees(data.filter((e: any) => e.commission_based).map((e: any) => e.name));
+    }
   }
 
   async function loadCardInventory() {
@@ -221,6 +244,7 @@ export default function Breaks() {
   const profitAfterExpenses = revenueAfterFees - sharedExpenses - valleyOnlyExpenses;
   const imcTake = profitAfterExpenses * IMC_SPLIT;
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
+  const commissionAmount = calcCommission(percentToMarket, valleyTake, breaker, commissionEmployees);
 
   const filteredCardInventory = cardInventory.filter(c => {
     if (c.quantity <= 0) return false;
@@ -275,6 +299,7 @@ export default function Breaks() {
   }
 
   async function saveBreak() {
+    if (!breaker) return alert("Please select who ran this break.");
     setSaving(true);
     const extraBoxSummary = extraBoxTypes
       .filter(bt => (extraBoxCounts[bt.id] || 0) > 0)
@@ -304,6 +329,9 @@ export default function Breaks() {
       total_supply_cost: Math.round((imcSupplyCost + valleySupplyCost) * 100) / 100,
       chaser_cost: Math.round(chaserCost * 100) / 100,
       revenue_before_fees: Math.round(revenueBeforeCoupons * 100) / 100,
+      breaker,
+      commission_amount: Math.round(commissionAmount * 100) / 100,
+      commission_paid: false,
     }).select().single();
 
     if (brk) {
@@ -351,7 +379,7 @@ export default function Breaks() {
 
     await loadBreaks(); await loadCardInventory();
     setSaving(false); setView("list");
-    setCsvData([]); setCsvName(""); setBoxName("");
+    setCsvData([]); setCsvName(""); setBoxName(""); setBreaker("");
     setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
     setExtraBoxCounts({});
     setPickedCards({}); setCardSearch("");
@@ -377,12 +405,14 @@ export default function Breaks() {
 
   const mobileStyles = `
     .breaks-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .breaks-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .breaks-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
     .breaks-grid-4b { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     .breaks-stat-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .breaks-extra-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 768px) {
       .breaks-grid-2 { grid-template-columns: 1fr; }
+      .breaks-grid-3 { grid-template-columns: 1fr 1fr; }
       .breaks-grid-4 { grid-template-columns: 1fr 1fr; }
       .breaks-grid-4b { grid-template-columns: 1fr 1fr; }
       .breaks-stat-2 { grid-template-columns: 1fr 1fr; }
@@ -413,11 +443,7 @@ export default function Breaks() {
       { label: "How many Jumbo boxes", value: String(b.jumbo_hobby_count || 0) },
       { label: "How many D-Mega boxes", value: String(b.double_mega_count || 0) },
       { label: "Wonders product", value: "None" },
-      { label: "Other product", value: [
-          b.blaster_count > 0 ? `Blaster x${b.blaster_count}` : "",
-          ...extraBoxTypes.filter(bt => (extraBoxCounts[bt.id] || 0) > 0).map(bt => `${bt.label} x${extraBoxCounts[bt.id] || 0}`)
-        ].filter(Boolean).join(", ") || "None"
-      },
+      { label: "Other product", value: "None" },
       { label: "Total revenue generated (before fees & coupons)", value: revBeforeAll.toFixed(2) },
       { label: "Total Whatnot fees", value: whatnotFeesForBreak.toFixed(2) },
       { label: "Stream expenses", value: streamExpensesText },
@@ -500,7 +526,10 @@ export default function Breaks() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: "#e5e5e5" }}>{b.box_name || "—"}</div>
-                    <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{b.date} · {b.num_boxes || 0} boxes · {b.spots_sold} spots</div>
+                    <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>
+                      {b.date} · {b.num_boxes || 0} boxes · {b.spots_sold} spots
+                      {b.breaker && <span style={{ color: "#a78bfa", marginLeft: 8 }}>· 🎙️ {b.breaker}</span>}
+                    </div>
                   </div>
                   {b.boba_submitted ? (
                     <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ BOBA</span>
@@ -528,6 +557,17 @@ export default function Breaks() {
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#4ade80" }}>{b.valley_take ? `$${parseFloat(b.valley_take).toFixed(2)}` : "—"}</div>
                   </div>
                 </div>
+                {b.commission_amount > 0 && (
+                  <div style={{ background: "#0f0a1a", border: "1px solid #a78bfa33", borderRadius: 8, padding: "8px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "#a78bfa" }}>💼 {b.breaker} commission</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>${parseFloat(b.commission_amount).toFixed(2)}</span>
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: b.commission_paid ? "#4ade8022" : "#f8717122", color: b.commission_paid ? "#4ade80" : "#f87171" }}>
+                        {b.commission_paid ? "Paid" : "Unpaid"}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <a href={`/dashboard/breaks/${b.id}`} style={{ fontSize: 12, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 12px", textDecoration: "none" }}>View</a>
                   {confirmId === b.id ? (
@@ -561,9 +601,24 @@ export default function Breaks() {
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Break details</div>
-          <div className="breaks-grid-2">
-            <div><label style={s.label}>Date of break</label><input style={s.input} type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-            <div><label style={s.label}>Box product name</label><input style={s.input} type="text" placeholder="e.g. Griffey Break" value={boxName} onChange={e => setBoxName(e.target.value)} /></div>
+          <div className="breaks-grid-3">
+            <div>
+              <label style={s.label}>Date of break</label>
+              <input style={s.input} type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <div>
+              <label style={s.label}>Box product name</label>
+              <input style={s.input} type="text" placeholder="e.g. Griffey Break" value={boxName} onChange={e => setBoxName(e.target.value)} />
+            </div>
+            <div>
+              <label style={s.label}>Breaker <span style={{ color: "#f87171" }}>*</span></label>
+              <select style={s.input} value={breaker} onChange={e => setBreaker(e.target.value)}>
+                <option value="">— Select breaker —</option>
+                {employees.map(emp => (
+                  <option key={emp.name} value={emp.name}>{emp.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={s.label}>Promotion total ($)</label>
@@ -599,10 +654,8 @@ export default function Breaks() {
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: "#555", marginTop: 8 }}>To add/remove box types, go to <a href="/settings" style={{ color: "#fb923c", textDecoration: "none" }}>Settings → Extra box types</a></div>
             </div>
           )}
-          {extraBoxTypes.length === 0 && <div style={{ fontSize: 11, color: "#444", marginBottom: 12 }}>Need a different box type? Add it in <a href="/settings" style={{ color: "#555", textDecoration: "none" }}>Settings → Extra box types</a></div>}
           <div className="breaks-stat-2">
             <div style={s.stat}><div style={s.statLabel}>Total boxes</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div></div>
             <div style={s.stat}><div style={s.statLabel}>Market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
@@ -777,20 +830,33 @@ export default function Breaks() {
               </div>
             </div>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>IMC split (70/30)</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: commissionAmount > 0 ? 12 : 0 }}>
               <div style={{ background: "#0f0f0f", border: "1px solid #fb923c33", borderRadius: 10, padding: 16 }}>
                 <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏆 BOBA (70%)</div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: "#fb923c" }}>${imcTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Expenses: -${imcShareOfExpenses.toFixed(2)}</div>
-                <div style={{ fontSize: 12, color: "#fb923c", marginTop: 6, fontWeight: 600 }}>Net: ${(imcTake - imcShareOfExpenses).toFixed(2)}</div>
               </div>
               <div style={{ background: "#0f0f0f", border: "1px solid #4ade8033", borderRadius: 10, padding: 16 }}>
                 <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>🏠 Valley (30%)</div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>${valleyTake.toFixed(2)}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Shared: -${valleyShareOfExpenses.toFixed(2)}</div>
-                <div style={{ fontSize: 12, color: "#4ade80", marginTop: 6, fontWeight: 600 }}>Net: ${(valleyTake - valleyShareOfExpenses - valleyOnlyExpenses).toFixed(2)}</div>
               </div>
             </div>
+            {commissionAmount > 0 && (
+              <div style={{ background: "#0f0a1a", border: "1px solid #a78bfa44", borderRadius: 10, padding: 16 }}>
+                <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>💼 {breaker} commission ({percentToMarket.toFixed(1)}% to market)</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: "#a78bfa" }}>${commissionAmount.toFixed(2)}</div>
+                    <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                      {percentToMarket < 120 ? "30%" : percentToMarket < 140 ? "35%" : percentToMarket < 160 ? "40%" : percentToMarket < 180 ? "50%" : "60%"} of Valley's ${valleyTake.toFixed(2)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 13, color: "#38bdf8", fontWeight: 600 }}>Valley net after commission</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#38bdf8" }}>${(valleyTake - commissionAmount).toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
