@@ -22,6 +22,8 @@ export default function BreakShipmentsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isShipper, setIsShipper] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const [selectedBreak, setSelectedBreak] = useState("");
   const [shipDate, setShipDate] = useState(new Date().toISOString().split("T")[0]);
@@ -90,6 +92,14 @@ export default function BreakShipmentsPage() {
     setShipDate(new Date().toISOString().split("T")[0]);
   }
 
+  async function deleteShipment(id: number) {
+    setDeletingId(id);
+    await supabase.from("break_shipments").delete().eq("id", id);
+    setDeletingId(null);
+    setConfirmId(null);
+    await loadData(loggedInName, isAdmin ? "admin" : "employee");
+  }
+
   const myShipments = isAdmin ? shipments : shipments.filter(s => s.shipper_name === loggedInName);
   const totalEarned = myShipments.reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
   const totalUnpaid = myShipments.filter(sh => !sh.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
@@ -129,6 +139,8 @@ export default function BreakShipmentsPage() {
     <div style={s.shell}>
       <style>{mobileStyles}</style>
       <div style={s.content}>
+
+        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Break Shipments</h1>
@@ -180,7 +192,6 @@ export default function BreakShipmentsPage() {
           <div style={{ ...s.section, borderColor: "#7c3aed44" }}>
             <div style={s.sectionTitle}>Log shipment</div>
 
-            {/* Admin shipper selector */}
             {isAdmin && (
               <div style={{ marginBottom: 12 }}>
                 <label style={s.label}>Shipper</label>
@@ -226,10 +237,11 @@ export default function BreakShipmentsPage() {
 
             {/* Pay preview */}
             <div style={{ background: previewPay > 0 ? "#0f0a1a" : "#0f0f0f", border: `1px solid ${previewPay > 0 ? "#a78bfa44" : "#1e1e1e"}`, borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-              <span style={{ fontSize: 13, color: "#a78bfa" }}>
-                Pay for this shipment: <strong style={{ fontSize: 18, color: previewPay > 0 ? "#a78bfa" : "#555" }}>${previewPay.toFixed(2)}</strong>
-                {previewPay > 0 && <span style={{ fontSize: 11, color: "#555", marginLeft: 8 }}>for {activeShipper}</span>}
-              </span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 13, color: "#a78bfa" }}>Pay for this shipment</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: previewPay > 0 ? "#a78bfa" : "#555" }}>${previewPay.toFixed(2)}</span>
+              </div>
+              {previewPay > 0 && <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>for {activeShipper} · {cases === "3plus" ? "3+ Cases" : `${cases} Case`}</div>}
             </div>
 
             <button style={{ ...s.submitBtn, width: "100%" }} onClick={submitShipment} disabled={submitting}>
@@ -239,7 +251,9 @@ export default function BreakShipmentsPage() {
         )}
 
         {/* Shipments list */}
-        {loading ? <p style={{ color: "#555" }}>Loading...</p> : myShipments.length === 0 ? (
+        {loading ? (
+          <p style={{ color: "#555" }}>Loading...</p>
+        ) : myShipments.length === 0 ? (
           <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
             <p style={{ color: "#555", fontSize: 13 }}>No shipments logged yet</p>
           </div>
@@ -257,11 +271,23 @@ export default function BreakShipmentsPage() {
                     </div>
                     {sh.notes && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>{sh.notes}</div>}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 16, fontWeight: 700, color: sh.paid ? "#4ade80" : "#a78bfa" }}>${parseFloat(sh.pay_amount).toFixed(2)}</span>
                     <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: sh.paid ? "#4ade8022" : "#f8717122", color: sh.paid ? "#4ade80" : "#f87171" }}>
                       {sh.paid ? "Paid" : "Unpaid"}
                     </span>
+                    {isAdmin && (
+                      confirmId === sh.id ? (
+                        <>
+                          <button onClick={() => deleteShipment(sh.id)} disabled={deletingId === sh.id} style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>
+                            {deletingId === sh.id ? "..." : "Confirm"}
+                          </button>
+                          <button onClick={() => setConfirmId(null)} style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Cancel</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmId(sh.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Delete</button>
+                      )
+                    )}
                   </div>
                 </div>
               ))}
