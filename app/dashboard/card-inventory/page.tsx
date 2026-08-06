@@ -22,6 +22,7 @@ const SETS = [
   { label: "Griffey", file: "/boba-checklist.csv" },
   { label: "Alpha", file: "/alpha-boba-checklist.csv" },
   { label: "Alpha Update", file: "/alpha-update-boba-checklist.csv" },
+  { label: "Tecmo", file: "/tecmo-checklist.csv" },
 ];
 
 const SUBSETS = ["Chasers", "Insurance", "First Timers"];

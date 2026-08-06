@@ -21,6 +21,7 @@ const SETS = [
   { label: "Griffey", file: "/boba-checklist.csv", color: "#fb923c" },
   { label: "Alpha", file: "/alpha-boba-checklist.csv", color: "#a78bfa" },
   { label: "Alpha Update", file: "/alpha-update-boba-checklist.csv", color: "#38bdf8" },
+  { label: "Tecmo", file: "/tecmo-checklist.csv", color: "#4ade80" },
 ];
 
 const weaponColors: Record<string, string> = {
