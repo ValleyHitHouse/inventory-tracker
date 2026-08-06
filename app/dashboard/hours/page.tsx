@@ -2,34 +2,51 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
-const SHIPPER_RATES: Record<string, { "1": number; "2": number; "3plus": number }> = {
-  Caitlin: { "1": 70, "2": 90, "3plus": 110 },
-  Abbi: { "1": 60, "2": 80, "3plus": 110 },
-};
+const SHIPPER_TABS = ["Caitlin", "Abbi"];
 
-const CASE_OPTIONS = [
-  { value: "1", label: "1 Case" },
-  { value: "2", label: "2 Cases" },
-  { value: "3plus", label: "3+ Cases" },
-];
+function getPayPeriod(dateStr: string): string {
+  const date = new Date(dateStr + "T12:00:00");
+  const day = date.getDay(); // 0=Sun, 6=Sat
+  // Find the most recent Saturday (start of period)
+  const daysFromSat = (day + 1) % 7; // days since last Saturday
+  const periodStart = new Date(date);
+  periodStart.setDate(date.getDate() - daysFromSat);
+  const periodEnd = new Date(periodStart);
+  periodEnd.setDate(periodStart.getDate() + 6); // Friday
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmt(periodStart)} – ${fmt(periodEnd)}, ${periodEnd.getFullYear()}`;
+}
 
-export default function BreakShipmentsPage() {
-  const [shipments, setShipments] = useState<any[]>([]);
+function getPeriodKey(dateStr: string): string {
+  const date = new Date(dateStr + "T12:00:00");
+  const day = date.getDay();
+  const daysFromSat = (day + 1) % 7;
+  const periodStart = new Date(date);
+  periodStart.setDate(date.getDate() - daysFromSat);
+  return periodStart.toISOString().split("T")[0];
+}
+
+function groupByPeriod(items: any[], dateField: string) {
+  const groups: Record<string, { key: string; label: string; items: any[] }> = {};
+  for (const item of items) {
+    const key = getPeriodKey(item[dateField]);
+    const label = getPayPeriod(item[dateField]);
+    if (!groups[key]) groups[key] = { key, label, items: [] };
+    groups[key].items.push(item);
+  }
+  return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
+}
+
+export default function PayrollPage() {
+  const [section, setSection] = useState<"breakers" | "shippers">("breakers");
+  const [breakerTab, setBreakerTab] = useState("All Breakers");
+  const [shipperTab, setShipperTab] = useState("Caitlin");
   const [breaks, setBreaks] = useState<any[]>([]);
+  const [shipments, setShipments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [loggedInName, setLoggedInName] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isShipper, setIsShipper] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [confirmId, setConfirmId] = useState<number | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  const [selectedBreak, setSelectedBreak] = useState("");
-  const [shipDate, setShipDate] = useState(new Date().toISOString().split("T")[0]);
-  const [cases, setCases] = useState("1");
-  const [notes, setNotes] = useState("");
-  const [selectedShipper, setSelectedShipper] = useState("Caitlin");
+  const [markingPeriod, setMarkingPeriod] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState("");
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
     const cookies = document.cookie.split(";").reduce((acc, c) => {
@@ -37,263 +54,373 @@ export default function BreakShipmentsPage() {
       acc[k] = v;
       return acc;
     }, {} as Record<string, string>);
-    const name = decodeURIComponent(cookies["vhh-user"] || "");
     const role = cookies["vhh-role"] || "";
-    setLoggedInName(name);
-    setIsAdmin(role === "admin");
-    const shipper = Object.keys(SHIPPER_RATES).includes(name);
-    setIsShipper(shipper);
-    if (shipper) setSelectedShipper(name);
-    loadData(name, role);
+    const name = decodeURIComponent(cookies["vhh-user"] || "");
+    setUserRole(role);
+    setUserName(name);
+    if (SHIPPER_TABS.includes(name)) {
+      setSection("shippers");
+      setShipperTab(name);
+    }
+    loadData();
   }, []);
 
-  async function loadData(name: string, role: string) {
+  async function loadData() {
     setLoading(true);
-    const [shipmentsRes, breaksRes] = await Promise.all([
-      role === "admin"
-        ? supabase.from("break_shipments").select("*").order("created_at", { ascending: false })
-        : supabase.from("break_shipments").select("*").eq("shipper_name", name).order("created_at", { ascending: false }),
-      supabase.from("Breaks").select("id, box_name, date").order("date", { ascending: false }).limit(50),
+    const [breaksRes, shipmentsRes] = await Promise.all([
+      supabase.from("Breaks").select("*").not("commission_amount", "is", null).gt("commission_amount", 0).order("date", { ascending: false }),
+      supabase.from("break_shipments").select("*").order("ship_date", { ascending: false }),
     ]);
-    if (shipmentsRes.data) setShipments(shipmentsRes.data);
     if (breaksRes.data) setBreaks(breaksRes.data);
+    if (shipmentsRes.data) setShipments(shipmentsRes.data);
     setLoading(false);
   }
 
-  function getPayAmount(shipperName: string, caseValue: string): number {
-    const rates = SHIPPER_RATES[shipperName];
-    if (!rates) return 0;
-    return rates[caseValue as keyof typeof rates] || 0;
+  async function markShipperPeriodPaid(periodKey: string, shipper: string) {
+    setMarkingPeriod(`${shipper}-${periodKey}`);
+    const periodShipments = shipments.filter(s =>
+      s.shipper_name === shipper && getPeriodKey(s.ship_date) === periodKey && !s.paid
+    );
+    for (const sh of periodShipments) {
+      await supabase.from("break_shipments").update({ paid: true, paid_at: new Date().toISOString() }).eq("id", sh.id);
+    }
+    await loadData();
+    setMarkingPeriod(null);
   }
 
-  const activeShipper = isAdmin ? selectedShipper : loggedInName;
-  const previewPay = getPayAmount(activeShipper, cases);
+  async function markShipperPeriodUnpaid(periodKey: string, shipper: string) {
+    setMarkingPeriod(`${shipper}-${periodKey}`);
+    const periodShipments = shipments.filter(s =>
+      s.shipper_name === shipper && getPeriodKey(s.ship_date) === periodKey && s.paid
+    );
+    for (const sh of periodShipments) {
+      await supabase.from("break_shipments").update({ paid: false, paid_at: null }).eq("id", sh.id);
+    }
+    await loadData();
+    setMarkingPeriod(null);
+  }
 
-  async function submitShipment() {
-    if (!selectedBreak || !shipDate) return alert("Please select a break and date");
-    setSubmitting(true);
-    const payAmount = getPayAmount(activeShipper, cases);
-    const breakRecord = breaks.find(b => String(b.id) === selectedBreak);
-    await supabase.from("break_shipments").insert({
-      shipper_name: activeShipper,
-      shipper_username: activeShipper.toLowerCase(),
-      break_name: breakRecord ? `${breakRecord.box_name || "Break"} — ${breakRecord.date}` : selectedBreak,
-      ship_date: shipDate,
-      cases,
-      pay_amount: payAmount,
-      status: "pending",
-      paid: false,
-      notes: notes || null,
+  async function markBreakerPeriodPaid(periodKey: string, breakerName: string) {
+    setMarkingPeriod(`breaker-${breakerName}-${periodKey}`);
+    const periodBreaks = breaks.filter(b =>
+      b.breaker === breakerName && getPeriodKey(b.date) === periodKey && !b.commission_paid
+    );
+    for (const b of periodBreaks) {
+      await supabase.from("Breaks").update({ commission_paid: true, commission_paid_at: new Date().toISOString() }).eq("id", b.id);
+    }
+    await loadData();
+    setMarkingPeriod(null);
+  }
+
+  async function markBreakerPeriodUnpaid(periodKey: string, breakerName: string) {
+    setMarkingPeriod(`breaker-${breakerName}-${periodKey}`);
+    const periodBreaks = breaks.filter(b =>
+      b.breaker === breakerName && getPeriodKey(b.date) === periodKey && b.commission_paid
+    );
+    for (const b of periodBreaks) {
+      await supabase.from("Breaks").update({ commission_paid: false, commission_paid_at: null }).eq("id", b.id);
+    }
+    await loadData();
+    setMarkingPeriod(null);
+  }
+
+  const isAdmin = userRole === "admin";
+  const isShipper = SHIPPER_TABS.includes(userName);
+
+  // Breaker data
+  const allBreakers = Array.from(new Set(breaks.map(b => b.breaker).filter(Boolean)));
+  const breakerTabs = ["All Breakers", ...allBreakers];
+  const filteredBreaks = breakerTab === "All Breakers"
+    ? breaks : breaks.filter(b => b.breaker === breakerTab);
+
+  // Group breaker breaks by period and breaker
+  function getBreakerPeriods(breakerName: string) {
+    const breakerBreaks = breakerName === "All Breakers"
+      ? breaks : breaks.filter(b => b.breaker === breakerName);
+    const groups = groupByPeriod(breakerBreaks, "date");
+    return groups.map(group => {
+      const totalCommission = group.items.reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
+      const allPaid = group.items.every(b => b.commission_paid);
+      const somePaid = group.items.some(b => b.commission_paid);
+      const breakersInPeriod = Array.from(new Set(group.items.map((b: any) => b.breaker)));
+      return { ...group, totalCommission, allPaid, somePaid, breakersInPeriod };
     });
-    await loadData(loggedInName, isAdmin ? "admin" : "employee");
-    setSubmitting(false);
-    setShowForm(false);
-    setSelectedBreak(""); setCases("1"); setNotes("");
-    setShipDate(new Date().toISOString().split("T")[0]);
   }
 
-  async function deleteShipment(id: number) {
-    setDeletingId(id);
-    await supabase.from("break_shipments").delete().eq("id", id);
-    setDeletingId(null);
-    setConfirmId(null);
-    await loadData(loggedInName, isAdmin ? "admin" : "employee");
-  }
+  // Shipper data
+  const filteredShipments = isAdmin
+    ? shipments.filter(s => s.shipper_name === shipperTab)
+    : shipments.filter(s => s.shipper_name === userName);
 
-  const myShipments = isAdmin ? shipments : shipments.filter(s => s.shipper_name === loggedInName);
-  const totalEarned = myShipments.reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
-  const totalUnpaid = myShipments.filter(sh => !sh.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
-  const totalPaid = myShipments.filter(sh => sh.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
+  const shipperPeriods = groupByPeriod(filteredShipments, "ship_date").map(group => {
+    const totalPay = group.items.reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
+    const allPaid = group.items.every(sh => sh.paid);
+    const unpaidTotal = group.items.filter(sh => !sh.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
+    return { ...group, totalPay, allPaid, unpaidTotal };
+  });
+
+  const totalShipperOutstanding = filteredShipments.filter(s => !s.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
+  const totalShipperPaid = filteredShipments.filter(s => s.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
+
+  const totalBreakerOutstanding = filteredBreaks.filter(b => !b.commission_paid).reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
+  const totalBreakerPaid = filteredBreaks.filter(b => b.commission_paid).reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
+
+  const activeShipperName = isAdmin ? shipperTab : userName;
 
   const s = {
     shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", width: "100%", boxSizing: "border-box" as const },
-    content: { padding: "24px 16px", maxWidth: 900, margin: "0 auto", width: "100%", boxSizing: "border-box" as const },
+    content: { padding: "24px 16px", maxWidth: 1000, margin: "0 auto", width: "100%", boxSizing: "border-box" as const },
     section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
-    input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box" as const },
-    label: { fontSize: 12, color: "#666", marginBottom: 5, display: "block" },
-    submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
   };
 
   const mobileStyles = `
-    .bs-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
-    .bs-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-    @media (max-width: 768px) {
-      .bs-stats { grid-template-columns: 1fr 1fr; }
-      .bs-form-grid { grid-template-columns: 1fr; }
-    }
+    .pay-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+    @media (max-width: 768px) { .pay-stats { grid-template-columns: 1fr 1fr; } }
   `;
-
-  if (!isShipper && !isAdmin) {
-    return (
-      <div style={s.shell}>
-        <div style={s.content}>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>Break Shipments</h1>
-          <p style={{ color: "#555" }}>You don't have access to this page.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={s.shell}>
       <style>{mobileStyles}</style>
       <div style={s.content}>
 
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Break Shipments</h1>
-            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
-              {isAdmin ? "All shipper submissions" : `Your shipments — ${loggedInName}`}
-            </p>
-          </div>
-          <button onClick={() => setShowForm(!showForm)} style={s.submitBtn}>
-            {showForm ? "Cancel" : "+ Log shipment"}
-          </button>
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Payroll</h1>
+          <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Weekly pay periods — Saturday to Friday · Payday every Friday</p>
         </div>
 
-        {/* Stats */}
-        <div className="bs-stats">
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total earned</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#a78bfa" }}>${totalEarned.toFixed(2)}</div>
-            <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{myShipments.length} shipment{myShipments.length !== 1 ? "s" : ""}</div>
-          </div>
-          <div style={{ background: totalUnpaid > 0 ? "#1a0a00" : "#0f1a0f", border: `1px solid ${totalUnpaid > 0 ? "#f8717144" : "#4ade8044"}`, borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Outstanding</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: totalUnpaid > 0 ? "#f87171" : "#4ade80" }}>${totalUnpaid.toFixed(2)}</div>
-            <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{myShipments.filter(s => !s.paid).length} unpaid</div>
-          </div>
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total paid</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>${totalPaid.toFixed(2)}</div>
-            <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{myShipments.filter(s => s.paid).length} paid</div>
-          </div>
-        </div>
-
-        {/* Pay rate info for shippers */}
-        {isShipper && !isAdmin && SHIPPER_RATES[loggedInName] && (
-          <div style={{ ...s.section, borderColor: "#a78bfa33" }}>
-            <div style={s.sectionTitle}>💰 Your pay rates</div>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              {CASE_OPTIONS.map(opt => (
-                <div key={opt.value} style={{ background: "#0f0f0f", borderRadius: 8, padding: "10px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>{opt.label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#a78bfa" }}>${SHIPPER_RATES[loggedInName][opt.value as keyof typeof SHIPPER_RATES[string]]}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Submit form */}
-        {showForm && (
-          <div style={{ ...s.section, borderColor: "#7c3aed44" }}>
-            <div style={s.sectionTitle}>Log shipment</div>
-
-            {isAdmin && (
-              <div style={{ marginBottom: 12 }}>
-                <label style={s.label}>Shipper</label>
-                <select style={s.input} value={selectedShipper} onChange={e => setSelectedShipper(e.target.value)}>
-                  {Object.keys(SHIPPER_RATES).map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={s.label}>Break</label>
-              <select style={s.input} value={selectedBreak} onChange={e => setSelectedBreak(e.target.value)}>
-                <option value="">— Select break —</option>
-                {breaks.map(b => (
-                  <option key={b.id} value={String(b.id)}>
-                    {b.box_name || "Break"} — {b.date}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="bs-form-grid">
-              <div>
-                <label style={s.label}>Ship date</label>
-                <input style={s.input} type="date" value={shipDate} onChange={e => setShipDate(e.target.value)} />
-              </div>
-              <div>
-                <label style={s.label}>Cases</label>
-                <select style={s.input} value={cases} onChange={e => setCases(e.target.value)}>
-                  {CASE_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <label style={s.label}>Notes (optional)</label>
-              <input style={s.input} placeholder="Any additional details" value={notes} onChange={e => setNotes(e.target.value)} />
-            </div>
-
-            {/* Pay preview */}
-            <div style={{ background: previewPay > 0 ? "#0f0a1a" : "#0f0f0f", border: `1px solid ${previewPay > 0 ? "#a78bfa44" : "#1e1e1e"}`, borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: "#a78bfa" }}>Pay for this shipment</span>
-                <span style={{ fontSize: 20, fontWeight: 800, color: previewPay > 0 ? "#a78bfa" : "#555" }}>${previewPay.toFixed(2)}</span>
-              </div>
-              {previewPay > 0 && <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>for {activeShipper} · {cases === "3plus" ? "3+ Cases" : `${cases} Case`}</div>}
-            </div>
-
-            <button style={{ ...s.submitBtn, width: "100%" }} onClick={submitShipment} disabled={submitting}>
-              {submitting ? "Submitting..." : "Submit shipment"}
+        {/* Section toggle — only show if admin or show relevant section */}
+        {isAdmin && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+            <button onClick={() => setSection("breakers")} style={{ padding: "10px 24px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", border: `1px solid ${section === "breakers" ? "#a78bfa" : "#222"}`, background: section === "breakers" ? "#a78bfa22" : "#111", color: section === "breakers" ? "#a78bfa" : "#555" }}>
+              💼 Breakers
+            </button>
+            <button onClick={() => setSection("shippers")} style={{ padding: "10px 24px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", border: `1px solid ${section === "shippers" ? "#38bdf8" : "#222"}`, background: section === "shippers" ? "#38bdf822" : "#111", color: section === "shippers" ? "#38bdf8" : "#555" }}>
+              📦 Shippers
             </button>
           </div>
         )}
 
-        {/* Shipments list */}
-        {loading ? (
-          <p style={{ color: "#555" }}>Loading...</p>
-        ) : myShipments.length === 0 ? (
-          <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
-            <p style={{ color: "#555", fontSize: 13 }}>No shipments logged yet</p>
-          </div>
-        ) : (
-          <div style={s.section}>
-            <div style={s.sectionTitle}>Shipment history</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {myShipments.map(sh => (
-                <div key={sh.id} style={{ background: "#0f0f0f", borderRadius: 8, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, opacity: sh.paid ? 0.7 : 1 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5", marginBottom: 4 }}>{sh.break_name}</div>
-                    <div style={{ fontSize: 12, color: "#555" }}>
-                      {sh.ship_date} · {sh.cases === "3plus" ? "3+ Cases" : `${sh.cases} Case${sh.cases === "1" ? "" : "s"}`}
-                      {isAdmin && <span style={{ color: "#38bdf8", marginLeft: 8 }}>· {sh.shipper_name}</span>}
-                    </div>
-                    {sh.notes && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>{sh.notes}</div>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: sh.paid ? "#4ade80" : "#a78bfa" }}>${parseFloat(sh.pay_amount).toFixed(2)}</span>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: sh.paid ? "#4ade8022" : "#f8717122", color: sh.paid ? "#4ade80" : "#f87171" }}>
-                      {sh.paid ? "Paid" : "Unpaid"}
-                    </span>
-                    {isAdmin && (
-                      confirmId === sh.id ? (
-                        <>
-                          <button onClick={() => deleteShipment(sh.id)} disabled={deletingId === sh.id} style={{ fontSize: 11, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>
-                            {deletingId === sh.id ? "..." : "Confirm"}
-                          </button>
-                          <button onClick={() => setConfirmId(null)} style={{ fontSize: 11, background: "#1a1a1a", border: "none", color: "#555", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Cancel</button>
-                        </>
-                      ) : (
-                        <button onClick={() => setConfirmId(sh.id)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Delete</button>
-                      )
-                    )}
-                  </div>
+        {loading ? <p style={{ color: "#555" }}>Loading...</p> : <>
+
+          {/* BREAKERS SECTION */}
+          {section === "breakers" && isAdmin && (
+            <>
+              {/* Breaker tabs */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                {breakerTabs.map(tab => (
+                  <button key={tab} onClick={() => setBreakerTab(tab)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${breakerTab === tab ? "#a78bfa" : "#222"}`, background: breakerTab === tab ? "#a78bfa22" : "#111", color: breakerTab === tab ? "#a78bfa" : "#555" }}>
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {/* Summary stats */}
+              <div className="pay-stats">
+                <div style={{ background: totalBreakerOutstanding > 0 ? "#1a0a00" : "#0f1a0f", border: `1px solid ${totalBreakerOutstanding > 0 ? "#f8717144" : "#4ade8044"}`, borderRadius: 10, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Outstanding</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: totalBreakerOutstanding > 0 ? "#f87171" : "#4ade80" }}>${totalBreakerOutstanding.toFixed(2)}</div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+                <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total paid</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>${totalBreakerPaid.toFixed(2)}</div>
+                </div>
+                <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total earned</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#a78bfa" }}>${(totalBreakerOutstanding + totalBreakerPaid).toFixed(2)}</div>
+                </div>
+              </div>
+
+              {/* Weekly periods */}
+              {getBreakerPeriods(breakerTab).length === 0 ? (
+                <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
+                  <p style={{ color: "#555", fontSize: 13 }}>No commission breaks yet</p>
+                </div>
+              ) : getBreakerPeriods(breakerTab).map(period => {
+                const periodKey = `breaker-${breakerTab}-${period.key}`;
+                const isMarking = markingPeriod === periodKey;
+                const unpaidTotal = period.items.filter((b: any) => !b.commission_paid).reduce((s: number, b: any) => s + parseFloat(b.commission_amount || "0"), 0);
+                const paidTotal = period.items.filter((b: any) => b.commission_paid).reduce((s: number, b: any) => s + parseFloat(b.commission_amount || "0"), 0);
+
+                return (
+                  <div key={period.key} style={{ ...s.section, borderColor: period.allPaid ? "#4ade8022" : unpaidTotal > 0 ? "#f8717122" : "#1e1e1e", opacity: period.allPaid ? 0.75 : 1 }}>
+                    {/* Period header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Pay period</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#e5e5e5" }}>{period.label}</div>
+                        <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                          {period.items.length} break{period.items.length !== 1 ? "s" : ""}
+                          {breakerTab === "All Breakers" && period.breakersInPeriod.length > 0 && (
+                            <span style={{ color: "#a78bfa", marginLeft: 8 }}>{(period.breakersInPeriod as string[]).join(", ")}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                          {unpaidTotal > 0 && (
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 11, color: "#f87171" }}>UNPAID</div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: "#f87171" }}>${unpaidTotal.toFixed(2)}</div>
+                            </div>
+                          )}
+                          {paidTotal > 0 && (
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 11, color: "#4ade80" }}>PAID</div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: "#4ade80" }}>${paidTotal.toFixed(2)}</div>
+                            </div>
+                          )}
+                        </div>
+                        {breakerTab !== "All Breakers" && (
+                          period.allPaid ? (
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: "#4ade8022", color: "#4ade80", fontWeight: 600 }}>✓ Paid</span>
+                              <button onClick={() => markBreakerPeriodUnpaid(period.key, breakerTab)} disabled={!!isMarking} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Undo</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => markBreakerPeriodPaid(period.key, breakerTab)} disabled={!!isMarking} style={{ fontSize: 13, background: "linear-gradient(135deg,#7c3aed,#a78bfa)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 18px", cursor: "pointer", fontWeight: 600 }}>
+                              {isMarking ? "Marking..." : "✓ Mark week paid"}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Breaks in this period */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {period.items.map((b: any) => (
+                        <div key={b.id} style={{ background: "#0a0a0a", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>{b.box_name || b.date}</div>
+                            <div style={{ fontSize: 11, color: "#555" }}>
+                              {b.date}
+                              {b.breaker && <span style={{ color: "#a78bfa", marginLeft: 8 }}>· {b.breaker}</span>}
+                              {b.market_value > 0 && b.revenue_before_fees > 0 && <span style={{ marginLeft: 8 }}>· {((parseFloat(b.revenue_before_fees) / parseFloat(b.market_value)) * 100).toFixed(1)}% to market</span>}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: b.commission_paid ? "#4ade80" : "#a78bfa" }}>${parseFloat(b.commission_amount).toFixed(2)}</span>
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: b.commission_paid ? "#4ade8022" : "#f8717122", color: b.commission_paid ? "#4ade80" : "#f87171" }}>
+                              {b.commission_paid ? "Paid" : "Unpaid"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {/* SHIPPERS SECTION */}
+          {section === "shippers" && (
+            <>
+              {/* Shipper tabs — admin only */}
+              {isAdmin && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                  {SHIPPER_TABS.map(tab => (
+                    <button key={tab} onClick={() => setShipperTab(tab)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${shipperTab === tab ? "#38bdf8" : "#222"}`, background: shipperTab === tab ? "#38bdf822" : "#111", color: shipperTab === tab ? "#38bdf8" : "#555" }}>
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Who we're viewing */}
+              {!isAdmin && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#38bdf8" }}>📦 {userName}'s pay summary</div>
+                  <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>Payday is every Friday for the previous week (Sat–Fri)</div>
+                </div>
+              )}
+
+              {/* Summary stats */}
+              <div className="pay-stats">
+                <div style={{ background: totalShipperOutstanding > 0 ? "#1a0a00" : "#0f1a0f", border: `1px solid ${totalShipperOutstanding > 0 ? "#f8717144" : "#4ade8044"}`, borderRadius: 10, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Outstanding</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: totalShipperOutstanding > 0 ? "#f87171" : "#4ade80" }}>${totalShipperOutstanding.toFixed(2)}</div>
+                </div>
+                <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total paid</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>${totalShipperPaid.toFixed(2)}</div>
+                </div>
+                <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Total earned</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#38bdf8" }}>${(totalShipperOutstanding + totalShipperPaid).toFixed(2)}</div>
+                  <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{filteredShipments.length} shipments</div>
+                </div>
+              </div>
+
+              {/* Weekly periods */}
+              {shipperPeriods.length === 0 ? (
+                <div style={{ ...s.section, textAlign: "center", padding: 48 }}>
+                  <p style={{ color: "#555", fontSize: 13 }}>No shipments logged yet</p>
+                </div>
+              ) : shipperPeriods.map(period => {
+                const markKey = `${activeShipperName}-${period.key}`;
+                const isMarking = markingPeriod === markKey;
+
+                return (
+                  <div key={period.key} style={{ ...s.section, borderColor: period.allPaid ? "#4ade8022" : period.unpaidTotal > 0 ? "#f8717122" : "#1e1e1e", opacity: period.allPaid ? 0.75 : 1 }}>
+                    {/* Period header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Pay period · Paid on Friday</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#e5e5e5" }}>{period.label}</div>
+                        <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{period.items.length} shipment{period.items.length !== 1 ? "s" : ""}</div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 11, color: period.allPaid ? "#4ade80" : "#f87171" }}>{period.allPaid ? "PAID" : "TOTAL DUE"}</div>
+                          <div style={{ fontSize: 24, fontWeight: 800, color: period.allPaid ? "#4ade80" : "#f87171" }}>${period.totalPay.toFixed(2)}</div>
+                        </div>
+                        {isAdmin && (
+                          period.allPaid ? (
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: "#4ade8022", color: "#4ade80", fontWeight: 600 }}>✓ Paid</span>
+                              <button onClick={() => markShipperPeriodUnpaid(period.key, activeShipperName)} disabled={!!isMarking} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#555", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Undo</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => markShipperPeriodPaid(period.key, activeShipperName)} disabled={!!isMarking} style={{ fontSize: 13, background: "linear-gradient(135deg,#0369a1,#38bdf8)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 18px", cursor: "pointer", fontWeight: 600 }}>
+                              {isMarking ? "Marking..." : "✓ Mark week paid"}
+                            </button>
+                          )
+                        )}
+                        {!isAdmin && (
+                          <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: period.allPaid ? "#4ade8022" : "#f8717122", color: period.allPaid ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                            {period.allPaid ? "✓ Paid" : "Pending payment"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Shipments in this period */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {period.items.map((sh: any) => (
+                        <div key={sh.id} style={{ background: "#0a0a0a", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>{sh.break_name}</div>
+                            <div style={{ fontSize: 11, color: "#555" }}>
+                              {sh.ship_date} · {sh.cases === "3plus" ? "3+ Cases" : `${sh.cases} Case${sh.cases === "1" ? "" : "s"}`}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: sh.paid ? "#4ade80" : "#38bdf8" }}>${parseFloat(sh.pay_amount).toFixed(2)}</span>
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: sh.paid ? "#4ade8022" : "#f8717122", color: sh.paid ? "#4ade80" : "#f87171" }}>
+                              {sh.paid ? "Paid" : "Unpaid"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+        </>}
       </div>
     </div>
   );
