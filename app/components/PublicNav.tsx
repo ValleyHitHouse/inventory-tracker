@@ -32,7 +32,7 @@ const NAV_ITEMS = [
           { label: "Griffey", href: "/cards/griffey" },
           { label: "Alpha", href: "/cards/alpha" },
           { label: "Alpha Update", href: "/cards/alpha-update" },
-          { label: "Tecmo", href: "/cards/tecmo", soon: true },
+          { label: "Tecmo", href: "/cards/tecmo" },
         ]
       },
       {
