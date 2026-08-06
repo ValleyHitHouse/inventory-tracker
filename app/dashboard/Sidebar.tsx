@@ -117,7 +117,7 @@ export default function DashboardSidebar() {
       <NavLink href="/dashboard/cards" emoji="🃏" label="Card Database" />
       <NavLink href="/dashboard/card-inventory" emoji="📋" label="Card Inventory" />
       <NavLink href="/dashboard/lot-comp" emoji="🏷️" label="Lot Comps" />
-      <NavLink href="/dashboard/hours" emoji="⏱️" label="My Hours" />
+      <NavLink href="/dashboard/hours" emoji="📦" label="Break Shipments" />
       {isAdmin && (
 
 
