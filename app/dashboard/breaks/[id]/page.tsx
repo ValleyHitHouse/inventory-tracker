@@ -95,6 +95,8 @@ export default function BreakDetailPage() {
   const marketValue = parseFloat(brk.market_value || "0");
   const percentToMarket = marketValue > 0 ? (revenueBeforeFees / marketValue) * 100 : 0;
   const commissionAmount = parseFloat(brk.commission_amount || "0");
+  const commissionSupplyDeduction = parseFloat(brk.commission_supply_deduction || "0");
+  const grossCommission = commissionAmount + commissionSupplyDeduction;
 
   const payingOrders = orders.filter(o => parseFloat(o.price || "0") > 0 && !o.cancelled);
   const freeOrders = orders.filter(o => parseFloat(o.price || "0") === 0);
@@ -148,7 +150,7 @@ export default function BreakDetailPage() {
         </div>
 
         {/* Commission banner */}
-        {commissionAmount > 0 && (
+        {grossCommission > 0 && (
           <div style={{ background: "#0f0a1a", border: "1px solid #a78bfa44", borderRadius: 10, padding: "14px 18px", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
               <div>
@@ -156,6 +158,11 @@ export default function BreakDetailPage() {
                   💼 {brk.breaker} commission · {percentToMarket.toFixed(1)}% to market
                 </div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: "#a78bfa" }}>${commissionAmount.toFixed(2)}</div>
+                {commissionSupplyDeduction > 0 && (
+                  <div style={{ fontSize: 12, color: "#f87171", marginTop: 4 }}>
+                    ${grossCommission.toFixed(2)} earned − ${commissionSupplyDeduction.toFixed(2)} shipping-supply deduction
+                  </div>
+                )}
                 <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
                   Valley take: ${valleyTake.toFixed(2)} · Valley net after commission: ${(valleyTake - commissionAmount).toFixed(2)}
                 </div>

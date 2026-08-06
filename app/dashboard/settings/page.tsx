@@ -76,6 +76,11 @@ export default function SettingsPage() {
       { key: "extra_box_types", value: JSON.stringify(extraBoxes), updated_at: new Date().toISOString() },
       { onConflict: "key" }
     );
+    const deductionRaw = prices["breaker_supply_deduction_pct"];
+    await supabase.from("settings").upsert(
+      { key: "breaker_supply_deduction_pct", value: (deductionRaw === undefined || deductionRaw === "") ? "25" : deductionRaw, updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -123,6 +128,29 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Breaker commission */}
+        <div style={s.section}>
+          <div style={s.sectionTitle}>💼 Breaker commission</div>
+          <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>
+            When a commission breaker runs a break, this percentage of the break&apos;s total supply cost is deducted from their commission. Set to 0 to turn the deduction off.
+          </p>
+          {loading ? <p style={{ color: "#555" }}>Loading...</p> : (
+            <div style={{ maxWidth: 260 }}>
+              <label style={s.label}>Shipping-supply deduction <span style={{ color: "#444" }}>(% of total supply cost)</span></label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  style={s.input}
+                  type="number" min={0} max={100} step="1" placeholder="25"
+                  value={prices["breaker_supply_deduction_pct"] ?? ""}
+                  onChange={e => setPrices(prev => ({ ...prev, breaker_supply_deduction_pct: e.target.value }))}
+                />
+                <span style={{ color: "#555", fontSize: 13 }}>%</span>
+              </div>
+              <p style={{ fontSize: 11, color: "#444", marginTop: 8 }}>Applies only to breakers marked commission-based. Existing saved breaks are not changed.</p>
             </div>
           )}
         </div>

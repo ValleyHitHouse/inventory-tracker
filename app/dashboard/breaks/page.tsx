@@ -244,7 +244,11 @@ export default function Breaks() {
   const profitAfterExpenses = revenueAfterFees - sharedExpenses - valleyOnlyExpenses;
   const imcTake = profitAfterExpenses * IMC_SPLIT;
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
-  const commissionAmount = calcCommission(percentToMarket, valleyTake, breaker, commissionEmployees);
+  const totalSupplyCost = imcSupplyCost + valleySupplyCost;
+  const supplyDeductionPct = marketPrices["breaker_supply_deduction_pct"] ?? 25;
+  const grossCommission = calcCommission(percentToMarket, valleyTake, breaker, commissionEmployees);
+  const commissionSupplyDeduction = grossCommission > 0 ? totalSupplyCost * (supplyDeductionPct / 100) : 0;
+  const commissionAmount = Math.max(0, grossCommission - commissionSupplyDeduction);
 
   const filteredCardInventory = cardInventory.filter(c => {
     if (c.quantity <= 0) return false;
@@ -331,6 +335,7 @@ export default function Breaks() {
       revenue_before_fees: Math.round(revenueBeforeCoupons * 100) / 100,
       breaker,
       commission_amount: Math.round(commissionAmount * 100) / 100,
+      commission_supply_deduction: Math.round(commissionSupplyDeduction * 100) / 100,
       commission_paid: false,
     }).select().single();
 
@@ -848,7 +853,13 @@ export default function Breaks() {
                     <div style={{ fontSize: 24, fontWeight: 800, color: "#a78bfa" }}>${commissionAmount.toFixed(2)}</div>
                     <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
                       {percentToMarket < 120 ? "30%" : percentToMarket < 140 ? "35%" : percentToMarket < 160 ? "40%" : percentToMarket < 180 ? "50%" : "60%"} of Valley's ${valleyTake.toFixed(2)}
+                      {commissionSupplyDeduction > 0 && ` = $${grossCommission.toFixed(2)}`}
                     </div>
+                    {commissionSupplyDeduction > 0 && (
+                      <div style={{ fontSize: 12, color: "#f87171", marginTop: 2 }}>
+                        − ${commissionSupplyDeduction.toFixed(2)} supply deduction ({supplyDeductionPct}% of ${totalSupplyCost.toFixed(2)})
+                      </div>
+                    )}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 13, color: "#38bdf8", fontWeight: 600 }}>Valley net after commission</div>
