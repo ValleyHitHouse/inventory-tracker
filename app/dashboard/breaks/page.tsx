@@ -66,6 +66,55 @@ function calcSupplyEstimates(csvData: any[]) {
   return estimates;
 }
 
+const DEFAULT_SLEEVES: Record<string, number> = {
+  jumbo_hobby_count: 50, hobby_count: 17, double_mega_count: 12, blaster_count: 4,
+};
+
+// Per-break supply usage — drives the inventory deduction (kept separate from the
+// financial supply-cost estimate above, which still feeds profit/commission).
+function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number, skunkCards: number): Record<string, number> {
+  const buyers: Record<string, { paid: number; juiced: number; givvy: number }> = {};
+  for (const r of csvData) {
+    const price = parseFloat(r.original_item_price || "0");
+    const buyer = ((r.buyer_username || "unknown") + "").trim() || "unknown";
+    if (!buyers[buyer]) buyers[buyer] = { paid: 0, juiced: 0, givvy: 0 };
+    if (price > 0) buyers[buyer].paid++;
+    else {
+      const txt = ((r.product_name || "") + "").toLowerCase();
+      if (txt.includes("juiced")) buyers[buyer].juiced++;
+      else buyers[buyer].givvy++;
+    }
+  }
+  let bubbles = 0, armalopes = 0, clearBubbles = 0, shipments = 0, payShip = 0;
+  let totalJuiced = 0, totalPaid = 0, totalGivvy = 0;
+  for (const b of Object.values(buyers)) {
+    if (b.paid > 0 || b.juiced > 0 || b.givvy > 0) shipments++;
+    if (b.paid > 0) payShip++;
+    if ((b.paid >= 1 && b.paid <= 4) || (b.paid === 0 && b.juiced >= 1)) bubbles++;
+    if (b.paid === 0 && b.juiced === 0 && b.givvy >= 1) armalopes++;
+    if (b.juiced >= 1) clearBubbles++;
+    totalJuiced += b.juiced; totalPaid += b.paid; totalGivvy += b.givvy;
+  }
+  return {
+    "Bubbles": bubbles,
+    "Small Boxes": 0,
+    "Medium Boxes": 0,
+    "Large Boxes": 0,
+    "Armalopes": armalopes,
+    "Toploaders": boxSleeves,
+    "Penny Sleeves": boxSleeves,
+    "Team Bags": totalPaid + totalGivvy + totalJuiced + 10,
+    "Labels": shipments + 5,
+    "Valley Stickers": payShip,
+    "Giveaway Cards": totalGivvy + skunkCards,
+    "Mags": totalJuiced + hitsMagd,
+    "Mag Stickers": totalJuiced,
+    "Mag Labels": totalJuiced,
+    "Clear Bubbles": clearBubbles,
+    "Card Protectors": clearBubbles,
+  };
+}
+
 type CommissionTier = { minPct: number; rate: number };
 
 const DEFAULT_COMMISSION_TIERS: CommissionTier[] = [
@@ -129,6 +178,11 @@ export default function Breaks() {
   const [magPros, setMagPros] = useState("");
   const [deductingSupplies, setDeductingSupplies] = useState(false);
   const [suppliesDeducted, setSuppliesDeducted] = useState(false);
+  const [hitsMagd, setHitsMagd] = useState("");
+  const [skunkCards, setSkunkCards] = useState("");
+  const [usageEdits, setUsageEdits] = useState<Record<string, number>>({});
+  const [deductingInv, setDeductingInv] = useState(false);
+  const [deductedInv, setDeductedInv] = useState(false);
   const [inventoryPrices, setInventoryPrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -242,6 +296,28 @@ export default function Breaks() {
 
   function getSupplyCost(name: string, qty: number): number {
     return (inventoryPrices[name] || 0) * qty;
+  }
+
+  // --- New inventory deduction model (box-count + CSV driven) ---
+  const boxSleeves =
+    DEFAULT_BOX_TYPES.reduce((sum, bt) => {
+      const rate = marketPrices[bt.settingsKey.replace("_price", "_sleeves")] ?? DEFAULT_SLEEVES[bt.key] ?? 0;
+      return sum + (boxCounts[bt.key] || 0) * rate;
+    }, 0)
+    + extraBoxTypes.reduce((sum, bt) => sum + (extraBoxCounts[bt.id] || 0) * (parseFloat((bt as any).sleeveRate || "0") || 0), 0);
+  const autoUsage = computeSupplyUsage(csvData, Math.round(boxSleeves), parseInt(hitsMagd || "0") || 0, parseInt(skunkCards || "0") || 0);
+  const usageValue = (name: string) => (usageEdits[name] ?? autoUsage[name] ?? 0);
+
+  async function deductSupplies() {
+    setDeductingInv(true);
+    for (const name of Object.keys(autoUsage)) {
+      const qty = usageValue(name);
+      if (qty <= 0) continue;
+      const { data } = await supabase.from("Inventory").select("id,quantity").ilike("name", name).limit(1);
+      const row = data && data[0];
+      if (row) await supabase.from("Inventory").update({ quantity: Math.max(0, (Number(row.quantity) || 0) - qty) }).eq("id", row.id);
+    }
+    setDeductingInv(false); setDeductedInv(true);
   }
 
   const imcSupplyCost = Object.entries(allEstimates).filter(([name]) => IMC_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
@@ -757,60 +833,47 @@ export default function Breaks() {
           )}
         </div>
 
-        {csvData.length > 0 && Object.keys(supplyEstimates).length > 0 && (
+        {csvData.length > 0 && (
           <div style={s.section}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={s.sectionTitle}>📦 Estimated supplies used</div>
-              {suppliesDeducted && <span style={{ fontSize: 12, color: "#4ade80" }}>✓ Deducted</span>}
+              <div style={s.sectionTitle}>📦 Supplies to deduct</div>
+              {deductedInv && <span style={{ fontSize: 12, color: "#4ade80" }}>✓ Deducted from inventory</span>}
             </div>
-            <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Auto-calculated from CSV — edit if needed</p>
+            <p style={{ fontSize: 12, color: "#555", marginBottom: 14 }}>Auto-calculated from the CSV + box counts (juiced givvies detected from the line text). Edit any line before deducting — boxes start at 0, so bump the sizes you actually shipped.</p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
+                <div><div style={{ fontSize: 12, color: "#aaa" }}>Hits mag&apos;d</div><div style={{ fontSize: 10, color: "#555" }}>adds to Mags</div></div>
+                <input type="number" min={0} placeholder="0" value={hitsMagd} onChange={e => setHitsMagd(e.target.value)} style={{ ...s.smallInput, width: 55 }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
+                <div><div style={{ fontSize: 12, color: "#aaa" }}>Skunk cards</div><div style={{ fontSize: 10, color: "#555" }}>adds to Giveaway Cards</div></div>
+                <input type="number" min={0} placeholder="0" value={skunkCards} onChange={e => setSkunkCards(e.target.value)} style={{ ...s.smallInput, width: 55 }} />
+              </div>
+            </div>
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              {Object.entries(editedEstimates).map(([name, qty]) => (
-                <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-                    {inventoryPrices[name] && <div style={{ fontSize: 10, color: "#555" }}>${(inventoryPrices[name] * qty).toFixed(2)}</div>}
+              {Object.keys(autoUsage).map(name => {
+                const val = usageValue(name);
+                return (
+                  <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 12, color: "#aaa", minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, marginLeft: 8 }}>
+                      <button onClick={() => setUsageEdits(prev => ({ ...prev, [name]: Math.max(0, val - 1) }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>−</button>
+                      <input type="number" min={0} value={val} onChange={e => setUsageEdits(prev => ({ ...prev, [name]: parseInt(e.target.value) || 0 }))} style={{ ...s.smallInput, width: 48 }} />
+                      <button onClick={() => setUsageEdits(prev => ({ ...prev, [name]: val + 1 }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>+</button>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, marginLeft: 8 }}>
-                    <button onClick={() => setEditedEstimates(prev => ({ ...prev, [name]: Math.max(0, prev[name] - 1) }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>−</button>
-                    <input type="number" min={0} value={qty} onChange={e => setEditedEstimates(prev => ({ ...prev, [name]: parseInt(e.target.value) || 0 }))} style={{ ...s.smallInput, width: 44 }} />
-                    <button onClick={() => setEditedEstimates(prev => ({ ...prev, [name]: prev[name] + 1 }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>+</button>
-                  </div>
-                </div>
-              ))}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: `1px solid ${!magPros ? "#7c3aed" : "#1e1e1e"}`, borderRadius: 8, padding: "10px 12px" }}>
-                <div>
-                  <div style={{ fontSize: 12, color: "#aaa" }}>MagPros</div>
-                  <div style={{ fontSize: 10, color: "#7c3aed" }}>required</div>
-                </div>
-                <input type="number" min={0} placeholder="?" value={magPros} onChange={e => setMagPros(e.target.value)} style={{ ...s.smallInput, width: 55, border: !magPros ? "1px solid #7c3aed" : "1px solid #222" }} />
-              </div>
+                );
+              })}
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>Add extra supply</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <select id="extraSupplyName" style={{ ...s.input, flex: 1, minWidth: 140 }} defaultValue="">
-                  <option value="" disabled>Select supply...</option>
-                  {["Armalopes","Toploaders","Penny sleeves","Giveaway cards","Team bags","Bubble mailers","Stickers","Boxes (S)","Boxes (M)","Boxes (L)","MagPros","Shipping labels","Packing tape","Packing paper"].map(n => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-                <input id="extraSupplyQty" type="number" min={1} defaultValue={1} style={{ ...s.smallInput, width: 60 }} />
-                <button onClick={() => {
-                  const nameEl = document.getElementById("extraSupplyName") as HTMLSelectElement;
-                  const qtyEl = document.getElementById("extraSupplyQty") as HTMLInputElement;
-                  const name = nameEl.value; const qty = parseInt(qtyEl.value) || 1;
-                  if (!name) return;
-                  setEditedEstimates(prev => ({ ...prev, [name]: (prev[name] || 0) + qty }));
-                  nameEl.value = ""; qtyEl.value = "1";
-                }} style={{ background: "#a78bfa22", border: "1px solid #a78bfa", color: "#a78bfa", borderRadius: 8, padding: "0 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                  + Add
-                </button>
-              </div>
-            </div>
-            <button onClick={deductSuppliesFromInventory} disabled={deductingSupplies || suppliesDeducted || !magPros} style={{ width: "100%", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, cursor: suppliesDeducted || !magPros ? "not-allowed" : "pointer", marginTop: 4, background: suppliesDeducted ? "#1a3a1a" : "linear-gradient(135deg,#166534,#15803d)", color: suppliesDeducted ? "#4ade80" : "#fff" }}>
-              {deductingSupplies ? "Deducting..." : suppliesDeducted ? "✓ Supplies deducted" : "Deduct supplies from inventory"}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setUsageEdits({}); setDeductedInv(false); }} style={{ background: "none", border: "1px solid #333", color: "#777", borderRadius: 8, padding: "0 16px", fontSize: 13, cursor: "pointer" }}>Reset to auto</button>
+              <button onClick={deductSupplies} disabled={deductingInv || deductedInv} style={{ flex: 1, border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, cursor: deductedInv ? "not-allowed" : "pointer", background: deductedInv ? "#1a3a1a" : "linear-gradient(135deg,#166534,#15803d)", color: deductedInv ? "#4ade80" : "#fff" }}>
+              {deductingInv ? "Deducting..." : deductedInv ? "✓ Deducted from inventory" : "Deduct from inventory"}
             </button>
+            </div>
           </div>
         )}
 
