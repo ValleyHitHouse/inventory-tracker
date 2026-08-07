@@ -91,7 +91,7 @@ export default function BreakDetailPage() {
   const totalSupplyCost = parseFloat(brk.total_supply_cost || "0");
   const chaserCost = parseFloat(brk.chaser_cost || "0");
   const revenueBeforeFees = parseFloat(brk.revenue_before_fees || "0") || revenue / (1 - WHATNOT_FEE);
-  const whatnotFees = revenueBeforeFees * WHATNOT_FEE;
+  const whatnotFees = revenueBeforeFees - revenue;
   const marketValue = parseFloat(brk.market_value || "0");
   const percentToMarket = marketValue > 0 ? (revenueBeforeFees / marketValue) * 100 : 0;
   const commissionAmount = parseFloat(brk.commission_amount || "0");

@@ -228,7 +228,8 @@ export default function Breaks() {
     : csvData.reduce((s, r) => s + parseFloat(r.original_item_price || "0"), 0);
 
   const couponTotal = csvData.reduce((s, r) => s + parseFloat(r.coupon_price || "0"), 0);
-  const whatnotFees = revenueBeforeCoupons * WHATNOT_FEE;
+  const whatnotFeeRate = (marketPrices["whatnot_fee_pct"] ?? (WHATNOT_FEE * 100)) / 100;
+  const whatnotFees = revenueBeforeCoupons * whatnotFeeRate;
   const revenueAfterFees = revenueBeforeCoupons - whatnotFees;
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
   const freeGiveaways = csvData.filter(r => parseFloat(r.original_item_price || "0") === 0).length;
@@ -441,7 +442,7 @@ export default function Breaks() {
     const revBeforeAll = parseFloat(b.revenue_before_fees || "0") > 0
       ? parseFloat(b.revenue_before_fees)
       : parseFloat(b.revenue || "0") / (1 - WHATNOT_FEE);
-    const whatnotFeesForBreak = revBeforeAll * WHATNOT_FEE;
+    const whatnotFeesForBreak = revBeforeAll - parseFloat(b.revenue || "0");
     const totalSupplyCost = parseFloat(b.total_supply_cost || "0");
     const streamExpensesText =
       `Coupon Total: $${parseFloat(b.coupon_total || "0").toFixed(2)}\n` +

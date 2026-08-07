@@ -150,6 +150,11 @@ export default function SettingsPage() {
       { key: "breaker_supply_deduction_pct", value: (deductionRaw === undefined || deductionRaw === "") ? "25" : deductionRaw, updated_at: new Date().toISOString() },
       { onConflict: "key" }
     );
+    const whatnotRaw = prices["whatnot_fee_pct"];
+    await supabase.from("settings").upsert(
+      { key: "whatnot_fee_pct", value: (whatnotRaw === undefined || whatnotRaw === "") ? "11.2" : whatnotRaw, updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -207,6 +212,29 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Whatnot fee */}
+        <div style={s.section}>
+          <div style={s.sectionTitle}>🎥 Whatnot fee</div>
+          <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>
+            The Whatnot platform fee taken off gross sales, used to calculate net revenue on every break. Default is 11.2%.
+          </p>
+          {loading ? <p style={{ color: "#555" }}>Loading...</p> : (
+            <div style={{ maxWidth: 260 }}>
+              <label style={s.label}>Whatnot fee <span style={{ color: "#444" }}>(% of gross sales)</span></label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  style={s.input}
+                  type="number" min={0} max={100} step="0.1" placeholder="11.2"
+                  value={prices["whatnot_fee_pct"] ?? ""}
+                  onChange={e => setPrices(prev => ({ ...prev, whatnot_fee_pct: e.target.value }))}
+                />
+                <span style={{ color: "#555", fontSize: 13 }}>%</span>
+              </div>
+              <p style={{ fontSize: 11, color: "#444", marginTop: 8 }}>Applies to new breaks you calculate. Existing saved breaks keep the numbers they were saved with.</p>
             </div>
           )}
         </div>
