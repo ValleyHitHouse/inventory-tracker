@@ -103,22 +103,23 @@ function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number
     if (b.juiced >= 1) clearBubbles++;
     totalJuiced += b.juiced; totalPaid += b.paid; totalGivvy += b.givvy;
   }
+  const totalOrders = totalPaid + totalGivvy + totalJuiced; // every order line
   return {
-    "Bubble mailers": bubbles,
+    "Bubble mailers": totalPaid, // one per paid spot
     "Small Boxes": 0,
     "Medium Boxes": 0,
     "Large Boxes": 0,
     "Armalopes": armalopes,
     "Toploaders": boxSleeves,
     "Penny Sleeves": boxSleeves,
-    "Team Bags": totalPaid + totalGivvy + totalJuiced + 10,
+    "Team Bags": totalOrders + 10,
     "Labels": shipments + 5,
     "Valley Stickers": payShip,
     "Giveaway Cards": totalGivvy + skunkCards,
     "Mag Stickers": totalJuiced,
     "Mag Labels": totalJuiced,
-    "Clear Bubbles": clearBubbles,
-    "Card Protectors": clearBubbles,
+    "Clear Bubbles": totalOrders, // one per order
+    "Card Protectors": totalOrders, // one per clear bubble
   };
 }
 
