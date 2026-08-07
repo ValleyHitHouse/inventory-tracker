@@ -182,6 +182,7 @@ export default function Breaks() {
   const [boxCounts, setBoxCounts] = useState<Record<string, number>>({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
   const [extraBoxTypes, setExtraBoxTypes] = useState<ExtraBoxType[]>([]);
   const [extraBoxCounts, setExtraBoxCounts] = useState<Record<string, number>>({});
+  const [selectedBoxIds, setSelectedBoxIds] = useState<string[]>([]);
   const [promotionTotal, setPromotionTotal] = useState("");
   const [manualRevenueBefore, setManualRevenueBefore] = useState("");
   const [csvData, setCsvData] = useState<any[]>([]);
@@ -299,6 +300,20 @@ export default function Breaks() {
   const extraMarketValue = extraBoxTypes.reduce((sum, bt) =>
     sum + (extraBoxCounts[bt.id] || 0) * parseFloat(bt.price || "0"), 0);
   const marketValue = defaultMarketValue + extraMarketValue;
+
+  // Unified box list for the "add box type" picker (defaults + custom).
+  const allBoxTypes = [
+    ...DEFAULT_BOX_TYPES.map(bt => ({ id: bt.key, label: bt.label, kind: "default" as const, price: marketPrices[bt.settingsKey] || 0 })),
+    ...extraBoxTypes.map(bt => ({ id: bt.id, label: bt.label, kind: "extra" as const, price: parseFloat(bt.price || "0") || 0 })),
+  ];
+  const boxCountOf = (b: { id: string; kind: string }) => ((b.kind === "default" ? boxCounts[b.id] : extraBoxCounts[b.id]) || 0);
+  function setBoxQty(b: { id: string; kind: string }, n: number) {
+    const v = Math.max(0, Math.floor(n) || 0);
+    if (b.kind === "default") setBoxCounts(prev => ({ ...prev, [b.id]: v }));
+    else setExtraBoxCounts(prev => ({ ...prev, [b.id]: v }));
+  }
+  const shownBoxes = allBoxTypes.filter(b => selectedBoxIds.includes(b.id) || boxCountOf(b) > 0);
+  const unusedBoxes = allBoxTypes.filter(b => !shownBoxes.some(sb => sb.id === b.id));
 
   const revenueBeforeCoupons = manualRevenueBefore
     ? parseFloat(manualRevenueBefore)
@@ -496,7 +511,7 @@ export default function Breaks() {
     setSaving(false); setView("list");
     setCsvData([]); setCsvName(""); setBoxName(""); setBreaker("");
     setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
-    setExtraBoxCounts({});
+    setExtraBoxCounts({}); setSelectedBoxIds([]);
     setPickedCards({}); setCardSearch("");
     setSupplyEstimates({}); setEditedEstimates({});
     setMagPros(""); setSuppliesDeducted(false);
@@ -748,29 +763,44 @@ export default function Breaks() {
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Box breakdown</div>
-          <div className="breaks-grid-4" style={{ marginBottom: extraBoxTypes.length > 0 ? 16 : 12 }}>
-            {DEFAULT_BOX_TYPES.map(bt => (
-              <div key={bt.key}>
-                <label style={s.label}>{bt.label}</label>
-                <input style={s.input} type="number" min={0} value={boxCounts[bt.key] || 0} onChange={e => setBoxCounts(prev => ({ ...prev, [bt.key]: parseInt(e.target.value) || 0 }))} />
-                {marketPrices[bt.settingsKey] > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Mkt: ${(marketPrices[bt.settingsKey] * (boxCounts[bt.key] || 0)).toFixed(2)}</div>}
-              </div>
-            ))}
-          </div>
-          {extraBoxTypes.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: "#fb923c", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Extra box types</div>
-              <div className="breaks-extra-boxes">
-                {extraBoxTypes.map(bt => (
-                  <div key={bt.id}>
-                    <label style={s.label}>{bt.label}</label>
-                    <input style={s.input} type="number" min={0} value={extraBoxCounts[bt.id] || 0} onChange={e => setExtraBoxCounts(prev => ({ ...prev, [bt.id]: parseInt(e.target.value) || 0 }))} />
-                    {parseFloat(bt.price) > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>Mkt: ${(parseFloat(bt.price) * (extraBoxCounts[bt.id] || 0)).toFixed(2)}</div>}
+          <p style={{ fontSize: 12, color: "#555", marginBottom: 14 }}>Add the box types opened in this break, then set how many of each.</p>
+
+          {shownBoxes.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              {shownBoxes.map(b => (
+                <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</div>
+                    {b.price > 0 && <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>Mkt: ${(b.price * boxCountOf(b)).toFixed(2)}</div>}
                   </div>
-                ))}
-              </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => setBoxQty(b, boxCountOf(b) - 1)} style={{ width: 30, height: 30, border: "1px solid #333", background: "#111", borderRadius: 6, cursor: "pointer", color: "#aaa", fontSize: 16 }}>−</button>
+                    <input type="number" min={0} value={boxCountOf(b)} onChange={e => setBoxQty(b, parseInt(e.target.value) || 0)} style={{ ...s.input, width: 62, textAlign: "center" as const }} />
+                    <button onClick={() => setBoxQty(b, boxCountOf(b) + 1)} style={{ width: 30, height: 30, border: "1px solid #333", background: "#111", borderRadius: 6, cursor: "pointer", color: "#aaa", fontSize: 16 }}>+</button>
+                  </div>
+                  <button onClick={() => { setBoxQty(b, 0); setSelectedBoxIds(prev => prev.filter(id => id !== b.id)); }} title="Remove" style={{ background: "none", border: "1px solid #2a2a2a", color: "#777", borderRadius: 6, width: 30, height: 30, cursor: "pointer", flexShrink: 0, fontSize: 16 }}>×</button>
+                </div>
+              ))}
             </div>
           )}
+
+          {unusedBoxes.length > 0 && (
+            <select
+              value=""
+              onChange={e => {
+                const id = e.target.value;
+                if (!id) return;
+                setSelectedBoxIds(prev => prev.includes(id) ? prev : [...prev, id]);
+                const b = allBoxTypes.find(x => x.id === id);
+                if (b && boxCountOf(b) === 0) setBoxQty(b, 1);
+              }}
+              style={{ ...s.input, cursor: "pointer", marginBottom: 14, color: "#aaa" }}
+            >
+              <option value="">+ Add a box type…</option>
+              {unusedBoxes.map(b => <option key={b.id} value={b.id} style={{ color: "#e5e5e5" }}>{b.label}</option>)}
+            </select>
+          )}
+
           <div className="breaks-stat-2">
             <div style={s.stat}><div style={s.statLabel}>Total boxes</div><div style={{ ...s.statValue, color: "#e5e5e5" }}>{totalBoxes}</div></div>
             <div style={s.stat}><div style={s.statLabel}>Market value</div><div style={{ ...s.statValue, color: "#fb923c" }}>${marketValue.toFixed(2)}</div></div>
