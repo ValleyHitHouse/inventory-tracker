@@ -1,22 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { parseCSV } from "@/lib/csv";
 import Link from "next/link";
-
-function parseCSV(text: string) {
-  const lines = text.trim().split("\n");
-  const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
-  return lines.slice(1).map(line => {
-    const vals: string[] = [];
-    let cur = "", inQ = false;
-    for (const ch of line) {
-      if (ch === '"') inQ = !inQ;
-      else if (ch === "," && !inQ) { vals.push(cur.trim()); cur = ""; }
-      else cur += ch;
-    }
-    vals.push(cur.trim());
-    return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
-  });
-}
 
 const weaponColors: Record<string, string> = {
   Fire: "#fb923c", Ice: "#38bdf8", Steel: "#94a3b8",

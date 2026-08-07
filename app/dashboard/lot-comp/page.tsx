@@ -1,30 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
+import { parseCSV } from "@/lib/csv";
+import { CARD_SETS as SETS } from "@/lib/cardSets";
 import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
-
-function parseCSV(text: string) {
-  const lines = text.trim().split("\n");
-  const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
-  return lines.slice(1).map(line => {
-    const vals: string[] = [];
-    let cur = "", inQ = false;
-    for (const ch of line) {
-      if (ch === '"') inQ = !inQ;
-      else if (ch === "," && !inQ) { vals.push(cur.trim()); cur = ""; }
-      else cur += ch;
-    }
-    vals.push(cur.trim());
-    return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
-  });
-}
-
-const SETS = [
-  { label: "Griffey", file: "/boba-checklist.csv" },
-  { label: "Alpha", file: "/alpha-boba-checklist.csv" },
-  { label: "Alpha Update", file: "/alpha-update-boba-checklist.csv" },
-  { label: "Tecmo", file: "/tecmo-checklist.csv" },
-];
 
 const SUBSETS = ["Chasers", "Insurance", "First Timers"];
 

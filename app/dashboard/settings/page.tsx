@@ -164,9 +164,19 @@ export default function SettingsPage() {
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
   };
 
+  const mobileStyles = `
+    .set-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .set-tier-grid { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 8px; align-items: center; }
+    @media (max-width: 640px) {
+      .set-grid-2 { grid-template-columns: 1fr; }
+      .set-content { padding: 20px 12px !important; }
+    }
+  `;
+
   return (
     <div style={s.shell}>
-      <div style={s.content}>
+      <style>{mobileStyles}</style>
+      <div className="set-content" style={s.content}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Settings</h1>
@@ -182,7 +192,7 @@ export default function SettingsPage() {
           <div style={s.sectionTitle}>📦 Box market prices</div>
           <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Set the current market price per box — used to calculate % to market on breaks</p>
           {loading ? <p style={{ color: "#555" }}>Loading...</p> : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="set-grid-2">
               {PRICE_KEYS.map(({ key, label, desc }) => (
                 <div key={key}>
                   <label style={s.label}>{label} <span style={{ color: "#444" }}>({desc})</span></label>
@@ -254,13 +264,13 @@ export default function SettingsPage() {
 
               {selectedBreaker && (
                 <div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 40px", gap: 8, marginBottom: 6, fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px" }}>
+                  <div className="set-tier-grid" style={{ marginBottom: 6, fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px" }}>
                     <div>% to market (from)</div>
                     <div>Commission %</div>
                     <div></div>
                   </div>
                   {(tierEdits[selectedBreaker] || []).map((t, idx) => (
-                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 40px", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                    <div key={idx} className="set-tier-grid" style={{ marginBottom: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ color: "#555", fontSize: 12 }}>≥</span>
                         <input style={s.input} type="number" min={0} step="1" placeholder="0"
@@ -341,7 +351,7 @@ export default function SettingsPage() {
           {showAddBox ? (
             <div style={{ background: "#0f0f0f", border: "1px solid #a78bfa44", borderRadius: 8, padding: 14, marginBottom: 12 }}>
               <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }}>New box type</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div className="set-grid-2" style={{ marginBottom: 12 }}>
                 <div>
                   <label style={s.label}>Box type name</label>
                   <input
