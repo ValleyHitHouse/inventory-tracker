@@ -18,20 +18,23 @@ export default function Home() {
   const [breaks, setBreaks] = useState<any[]>([]);
   const [lots, setLots] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     async function load() {
-      const [i, b, l, p] = await Promise.all([
+      const [i, b, l, p, o] = await Promise.all([
         supabase.from("Inventory").select("*").order("id"),
         supabase.from("Breaks").select("*").order("date", { ascending: false }),
         supabase.from("lotcomps").select("*").order("created_at", { ascending: false }),
         supabase.from("payouts").select("*"),
+        supabase.from("BreakOrders").select("buyer_username, price, break_id").eq("cancelled", false),
       ]);
       if (i.data) setInv(i.data);
       if (b.data) setBreaks(b.data);
       if (l.data) setLots(l.data);
       if (p.data) setPayouts(p.data);
+      if (o.data) setOrders(o.data);
       setLoading(false);
     }
     load();
@@ -77,6 +80,38 @@ export default function Home() {
   const wkProfit = thisWeek.reduce((s, b) => s + parseFloat(b.net_profit || "0"), 0);
   const lastBreak = breaks[0];
 
+  // last week (for deltas)
+  const lwStart = new Date(wkStart); lwStart.setDate(lwStart.getDate() - 7);
+  const lastWeek = breaks.filter(b => {
+    if (!b.date) return false;
+    const t = new Date(b.date + "T12:00:00").getTime();
+    return t >= lwStart.getTime() && t < wkStart.getTime();
+  });
+  const lwRevenue = lastWeek.reduce((s, b) => s + parseFloat(b.revenue || "0"), 0);
+  const lwProfit = lastWeek.reduce((s, b) => s + parseFloat(b.net_profit || "0"), 0);
+
+  // momentum: last 10 breaks, oldest → newest
+  const momentum = [...breaks].filter(b => b.date).slice(0, 10).reverse();
+  const momoMax = Math.max(...momentum.map(b => parseFloat(b.revenue || "0")), 1);
+
+  // top buyer this week
+  const wkIds = new Set(thisWeek.map(b => String(b.id)));
+  const wkBuyer: Record<string, number> = {};
+  orders.forEach(o => {
+    if (!wkIds.has(String(o.break_id))) return;
+    const p = parseFloat(o.price || "0");
+    if (p > 0 && o.buyer_username) wkBuyer[o.buyer_username] = (wkBuyer[o.buyer_username] || 0) + p;
+  });
+  const topBuyer = Object.entries(wkBuyer).sort((a, b) => b[1] - a[1])[0];
+
+  const deltaNode = (cur: number, prev: number) => {
+    if (prev === 0 && cur === 0) return <span style={{ color: C.faint }}>no change vs last wk</span>;
+    const diff = cur - prev;
+    const pct = prev !== 0 ? (diff / Math.abs(prev)) * 100 : 100;
+    const up = diff >= 0;
+    return <span style={{ color: diff === 0 ? C.faint : up ? C.green : C.red }}>{up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}% vs last wk</span>;
+  };
+
   const actionCount = reorder.length + unsubmitted.length + pendingLots.length;
 
   const quickActions = [
@@ -100,10 +135,12 @@ export default function Home() {
         .cc-actions { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
         .cc-money { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
         .cc-week { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+        .cc-split { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 16px; }
         @media (max-width: 820px) {
           .cc-actions { grid-template-columns: 1fr 1fr; }
           .cc-money { grid-template-columns: 1fr 1fr; }
           .cc-week { grid-template-columns: 1fr 1fr; }
+          .cc-split { grid-template-columns: 1fr; }
         }
       `}</style>
 
@@ -129,9 +166,56 @@ export default function Home() {
           <StatTile label="Valley owed" value={money0(valleyOwed)} color={valleyOwed > 0 ? C.blue : C.green} sub={valleyOwed > 0 ? "Unpaid" : "Settled"} onClick={() => router.push("/dashboard/analytics")} />
           <StatTile label="BOBA owed" value={money0(bobaOwed)} color={bobaOwed > 0 ? C.orange : C.green} sub={bobaOwed > 0 ? "Unpaid" : "Settled"} onClick={() => router.push("/dashboard/analytics")} />
           <StatTile label="Commission owed" value={money0(commissionOwed)} color={commissionOwed > 0 ? C.purple : C.green} sub={commissionOwed > 0 ? "To breakers" : "All paid"} onClick={() => router.push("/dashboard/analytics")} />
-          <StatTile label="This week net" value={money0(wkProfit)} color={wkProfit >= 0 ? C.green : C.red} sub={`${thisWeek.length} break${thisWeek.length === 1 ? "" : "s"} · ${money0(wkRevenue)} rev`} onClick={() => router.push("/dashboard/recap")} />
+          <StatTile label="This week net" value={money0(wkProfit)} color={wkProfit >= 0 ? C.green : C.red} sub={deltaNode(wkProfit, lwProfit)} onClick={() => router.push("/dashboard/recap")} />
         </div>
       </Section>
+
+      {/* Momentum + top buyer */}
+      <div className="cc-split">
+        <Section title="Momentum" style={{ marginBottom: 0 }} right={<LinkButton href="/dashboard/analytics" size="sm">Analytics</LinkButton>}>
+          {momentum.length === 0 ? (
+            <p style={{ color: C.faint, fontSize: 13, margin: 0 }}>No breaks yet.</p>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 90, marginBottom: 12 }}>
+                {momentum.map((b, i) => {
+                  const rev = parseFloat(b.revenue || "0");
+                  const prof = parseFloat(b.net_profit || "0");
+                  const h = Math.max((rev / momoMax) * 84, 4);
+                  return (
+                    <div key={i} onClick={() => router.push(`/breaks/${b.id}`)} title={`${b.box_name || b.date} · ${money0(rev)}`} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", cursor: "pointer" }}>
+                      <div style={{ height: h, borderRadius: "4px 4px 0 0", background: prof >= 0 ? "linear-gradient(180deg,#a78bfa,#7c3aed)" : "linear-gradient(180deg,#f87171,#dc2626)" }} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                <div><span style={{ color: C.faint }}>Revenue </span><span style={{ color: C.green, fontWeight: 600 }}>{money0(wkRevenue)}</span> {deltaNode(wkRevenue, lwRevenue)}</div>
+                <div><span style={{ color: C.faint }}>Net </span><span style={{ color: C.purple, fontWeight: 600 }}>{money0(wkProfit)}</span></div>
+              </div>
+              <div style={{ fontSize: 10, color: C.fainter, marginTop: 8 }}>Last {momentum.length} breaks · purple = profit, red = loss</div>
+            </>
+          )}
+        </Section>
+
+        <Section title="Top buyer this week" style={{ marginBottom: 0 }} right={<LinkButton href="/dashboard/customers" size="sm">Customers</LinkButton>}>
+          {!topBuyer ? (
+            <p style={{ color: C.faint, fontSize: 13, margin: 0 }}>No orders logged this week yet.</p>
+          ) : (
+            <div onClick={() => router.push(`/customers/${encodeURIComponent(topBuyer[0])}`)} style={{ cursor: "pointer" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.purple, marginBottom: 2 }}>{topBuyer[0]}</div>
+              <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>{money0(topBuyer[1])} <span style={{ color: C.faint, fontWeight: 400 }}>spent this week</span></div>
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                {Object.entries(wkBuyer).sort((a, b) => b[1] - a[1]).slice(1, 4).map(([u, v]) => (
+                  <div key={u} onClick={(e) => { e.stopPropagation(); router.push(`/customers/${encodeURIComponent(u)}`); }} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
+                    <span>{u}</span><span style={{ color: C.green }}>{money0(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Section>
+      </div>
 
       {/* Needs action */}
       <Section title={`Needs action${actionCount > 0 ? ` · ${actionCount}` : ""}`}>
