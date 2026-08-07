@@ -2,41 +2,59 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
-// Number of units that make up one pack for this item (100 team bags to a pack, etc.).
+const CAT_META: Record<string, { color: string; label: string; icon: string }> = {
+  Supplies: { color: "#4ade80", label: "Supplies", icon: "📦" },
+  Cards: { color: "#a78bfa", label: "Cards", icon: "🃏" },
+  Branding: { color: "#fb923c", label: "Branding", icon: "🏷️" },
+};
+const CAT_ORDER = ["Supplies", "Cards", "Branding"];
+
 function perPack(item: any): number {
   const n = Number(item.units_per_pack);
   return n > 0 ? n : 1;
 }
-
 function packsLabel(units: number, per: number): string {
-  const packs = units / (per > 0 ? per : 1);
-  // show up to 1 decimal, but drop a trailing .0
-  const r = Math.round(packs * 10) / 10;
+  const p = units / (per > 0 ? per : 1);
+  const r = Math.round(p * 10) / 10;
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
-
 function statusInfo(units: number, per: number) {
-  if (units <= 0) return { label: "Out of stock", color: "#f87171", bg: "#f8717122" };
-  // Low = under one full pack for pack items; under 20 loose units otherwise.
-  const lowThreshold = per > 1 ? per : 20;
-  if (units <= lowThreshold) return { label: "Low stock", color: "#fb923c", bg: "#fb923c22" };
-  return { label: "In stock", color: "#4ade80", bg: "#4ade8022" };
+  if (units <= 0) return { key: "out", label: "Out of stock", color: "#f87171" };
+  const low = per > 1 ? per : 20; // under one pack (or 20 loose) = low
+  if (units <= low) return { key: "low", label: "Low stock", color: "#fb923c" };
+  return { key: "in", label: "In stock", color: "#4ade80" };
 }
 
-function InventoryCard({ item, onUpdate, onEdit }: {
+const stepBtn: React.CSSProperties = {
+  width: 32, height: 32, border: "1px solid #2a2a2a", background: "#0f0f0f",
+  borderRadius: 8, cursor: "pointer", fontSize: 18, color: "#aaa",
+  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+};
+const qtyInput: React.CSSProperties = {
+  width: 52, textAlign: "center", border: "1px solid #2a2a2a", borderRadius: 8,
+  padding: "6px 2px", fontSize: 13, background: "#0f0f0f", color: "#e5e5e5", outline: "none",
+};
+const modalInput: React.CSSProperties = {
+  width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 8,
+  padding: "10px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box",
+};
+const modalLabel: React.CSSProperties = { fontSize: 12, color: "#888", marginBottom: 6, display: "block" };
+
+function ItemTile({ item, onQty, onEdit }: {
   item: any;
-  onUpdate: (id: number, qty: number) => void;
+  onQty: (id: number, qty: number) => void;
   onEdit: (item: any) => void;
 }) {
   const per = perPack(item);
   const isPack = per > 1;
   const [units, setUnits] = useState<number>(Number(item.quantity) || 0);
   useEffect(() => { setUnits(Number(item.quantity) || 0); }, [item.quantity]);
+  const [hover, setHover] = useState(false);
 
-  function save(newUnits: number) {
-    const q = Math.max(0, Math.round(newUnits));
+  function save(u: number) {
+    const q = Math.max(0, Math.round(u));
     setUnits(q);
-    onUpdate(item.id, q);
+    onQty(item.id, q);
   }
 
   const st = statusInfo(units, per);
@@ -44,96 +62,48 @@ function InventoryCard({ item, onUpdate, onEdit }: {
   const reorderHref = item.reorder?.startsWith("http") ? item.reorder : `https://${item.reorder}`;
 
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "12px 16px", borderBottom: "1px solid #161616", gap: 12,
-    }}>
-      {/* Left: name + meta */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5", marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {item.name}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: st.bg, color: st.color }}>
-            {st.label}
-          </span>
-          {isPack ? (
-            <span style={{ fontSize: 11, color: "#a78bfa" }}>
-              {packsLabel(units, per)} packs · {units} units
-            </span>
-          ) : (
-            <span style={{ fontSize: 11, color: "#555" }}>{units} units</span>
-          )}
-          {isPack && <span style={{ fontSize: 11, color: "#444" }}>pack of {per}</span>}
-          {item.cost && <span style={{ fontSize: 11, color: "#555" }}>{item.cost}</span>}
-          {isLink && (
-            <a href={reorderHref} target="_blank" style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none" }}>
-              Reorder ↗
-            </a>
-          )}
-          {item.reorder && !isLink && (
-            <span style={{ fontSize: 11, color: "#555" }}>{item.reorder}</span>
-          )}
-        </div>
-      </div>
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: "#111", border: "1px solid #1e1e1e", borderRadius: 14,
+        padding: "16px 16px 14px", display: "flex", flexDirection: "column", gap: 12,
+        position: "relative", overflow: "hidden",
+        transform: hover ? "translateY(-2px)" : "none",
+        boxShadow: hover ? "0 10px 30px rgba(0,0,0,0.5)" : "none",
+        transition: "transform .15s ease, box-shadow .15s ease",
+      }}
+    >
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: st.color, opacity: 0.85 }} />
 
-      {/* Right: qty controls + edit */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <button
-          onClick={() => save(units - per)}
-          title={isPack ? "Remove one pack" : "Remove one"}
-          style={{ width: 30, height: 30, border: "1px solid #333", background: "#1a1a1a", borderRadius: 6, cursor: "pointer", fontSize: 16, color: "#aaa", display: "flex", alignItems: "center", justifyContent: "center" }}
-        >−</button>
-        <input
-          value={units}
-          onChange={e => save(Number(e.target.value))}
-          type="number"
-          min={0}
-          title="Exact units on hand (set this for an audit)"
-          style={{ width: 56, textAlign: "center", border: "1px solid #333", borderRadius: 6, padding: "4px 2px", fontSize: 13, background: "#0f0f0f", color: "#e5e5e5", outline: "none" }}
-        />
-        <button
-          onClick={() => save(units + per)}
-          title={isPack ? "Add one pack" : "Add one"}
-          style={{ width: 30, height: 30, border: "1px solid #333", background: "#1a1a1a", borderRadius: 6, cursor: "pointer", fontSize: 16, color: "#aaa", display: "flex", alignItems: "center", justifyContent: "center" }}
-        >+</button>
-        <button
-          onClick={() => onEdit(item)}
-          style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}
-        >Edit</button>
-      </div>
-    </div>
-  );
-}
-
-function SectionList({ title, color, items, onUpdate, onEdit, search }: {
-  title: string; color: string; items: any[];
-  onUpdate: (id: number, qty: number) => void;
-  onEdit: (item: any) => void;
-  search: string;
-}) {
-  const filtered = items.filter(i => !search || i.name?.toLowerCase().includes(search.toLowerCase()));
-
-  return (
-    <div style={{ marginBottom: 28 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#e5e5e5" }}>{title}</h2>
-        <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 20, background: color + "22", color }}>
-          {filtered.length} items
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5", lineHeight: 1.3, minWidth: 0 }}>{item.name}</div>
+        <span style={{ fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 20, background: st.color + "1f", color: st.color, whiteSpace: "nowrap", flexShrink: 0 }}>
+          {st.label}
         </span>
       </div>
-      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, overflow: "hidden" }}>
-        <div className="inv-header" style={{ display: "grid", gridTemplateColumns: "1fr auto", padding: "8px 16px", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f" }}>
-          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px" }}>Item</span>
-          <span style={{ fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px" }}>On hand</span>
+
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontSize: 30, fontWeight: 800, color: "#fff", lineHeight: 1, letterSpacing: "-0.5px" }}>
+            {isPack ? packsLabel(units, per) : units}
+          </span>
+          <span style={{ fontSize: 13, color: "#666", fontWeight: 600 }}>{isPack ? "packs" : "units"}</span>
         </div>
-        {filtered.length === 0 ? (
-          <div style={{ padding: "16px", fontSize: 13, color: "#555" }}>No items match</div>
-        ) : (
-          filtered.map(item => (
-            <InventoryCard key={item.id} item={item} onUpdate={onUpdate} onEdit={onEdit} />
-          ))
+        <div style={{ fontSize: 11, color: "#555", marginTop: 5 }}>
+          {isPack ? `${units} units · pack of ${per}` : "counted individually"}
+          {item.cost ? ` · ${item.cost}` : ""}
+        </div>
+        {isLink && (
+          <a href={reorderHref} target="_blank" style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none", marginTop: 4, display: "inline-block" }}>Reorder ↗</a>
         )}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto" }}>
+        <button onClick={() => save(units - per)} title={isPack ? "Remove one pack" : "Remove one"} style={stepBtn}>−</button>
+        <input value={units} onChange={e => save(Number(e.target.value))} type="number" min={0} title="Type the exact count on hand to audit" style={qtyInput} />
+        <button onClick={() => save(units + per)} title={isPack ? "Add one pack" : "Add one"} style={stepBtn}>+</button>
+        <button onClick={() => onEdit(item)} style={{ marginLeft: "auto", fontSize: 12, background: "none", border: "1px solid #2a2a2a", color: "#888", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Edit</button>
       </div>
     </div>
   );
@@ -141,251 +111,293 @@ function SectionList({ title, color, items, onUpdate, onEdit, search }: {
 
 export default function InventoryPage() {
   const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [editCost, setEditCost] = useState("");
-  const [editReorder, setEditReorder] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editPerPack, setEditPerPack] = useState("1");
-  const [editUnits, setEditUnits] = useState("0");
-  const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  // unified add/edit modal
+  const [modal, setModal] = useState<null | "add" | "edit">(null);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [fName, setFName] = useState("");
+  const [fCategory, setFCategory] = useState("Supplies");
+  const [fPerPack, setFPerPack] = useState("1");
+  const [fUnits, setFUnits] = useState("0");
+  const [fCost, setFCost] = useState("");
+  const [fReorder, setFReorder] = useState("");
+  const [modalSaving, setModalSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newCategory, setNewCategory] = useState("Supplies");
-  const [newPerPack, setNewPerPack] = useState("1");
-  const [newUnits, setNewUnits] = useState("0");
-  const [newCost, setNewCost] = useState("");
-  const [newReorder, setNewReorder] = useState("");
-  const [addingSaving, setAddingSaving] = useState(false);
 
   useEffect(() => {
     supabase.from("Inventory").select("*").order("id").then(({ data }) => {
       if (data) setItems(data);
+      setLoading(false);
     });
   }, []);
 
-  async function handleUpdate(id: number, qty: number) {
+  async function handleQty(id: number, qty: number) {
     setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i));
     setSaving(true); setSaved(false);
     await supabase.from("Inventory").update({ quantity: qty }).eq("id", id);
     setSaving(false); setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 1500);
   }
 
-  async function saveEdit() {
-    if (!editingItem) return;
-    setSavingEdit(true);
-    const perPackNum = Math.max(1, Math.round(Number(editPerPack) || 1));
-    const unitsNum = Math.max(0, Math.round(Number(editUnits) || 0));
-    await supabase.from("Inventory").update({
-      name: editName, cost: editCost, reorder: editReorder,
-      units_per_pack: perPackNum, quantity: unitsNum,
-    }).eq("id", editingItem.id);
-    setItems(prev => prev.map(i => i.id === editingItem.id
-      ? { ...i, name: editName, cost: editCost, reorder: editReorder, units_per_pack: perPackNum, quantity: unitsNum }
-      : i));
-    setSavingEdit(false);
-    setEditingItem(null);
+  function openAdd() {
+    setModal("add"); setEditId(null); setConfirmDelete(false);
+    setFName(""); setFCategory(catFilter !== "All" ? catFilter : "Supplies");
+    setFPerPack("1"); setFUnits("0"); setFCost(""); setFReorder("");
   }
+  function openEdit(item: any) {
+    setModal("edit"); setEditId(item.id); setConfirmDelete(false);
+    setFName(item.name || "");
+    setFCategory(item.category || "Supplies");
+    setFPerPack(String(Number(item.units_per_pack) > 0 ? Number(item.units_per_pack) : 1));
+    setFUnits(String(Number(item.quantity) || 0));
+    setFCost(item.cost || "");
+    setFReorder(item.reorder || "");
+  }
+  function closeModal() { setModal(null); setEditId(null); setConfirmDelete(false); }
 
-  function handleEdit(item: any) {
-    setEditingItem(item);
-    setConfirmDelete(false);
-    setEditName(item.name);
-    setEditCost(item.cost || "");
-    setEditReorder(item.reorder || "");
-    setEditPerPack(String(Number(item.units_per_pack) > 0 ? Number(item.units_per_pack) : 1));
-    setEditUnits(String(Number(item.quantity) || 0));
+  async function submitModal() {
+    if (!fName.trim()) return;
+    setModalSaving(true);
+    const per = Math.max(1, Math.round(Number(fPerPack) || 1));
+    const units = Math.max(0, Math.round(Number(fUnits) || 0));
+    const payload = { name: fName.trim(), category: fCategory, units_per_pack: per, quantity: units, cost: fCost || null, reorder: fReorder || null };
+    if (modal === "edit" && editId != null) {
+      await supabase.from("Inventory").update(payload).eq("id", editId);
+      setItems(prev => prev.map(i => i.id === editId ? { ...i, ...payload } : i));
+    } else {
+      const { data } = await supabase.from("Inventory").insert(payload).select();
+      if (data && data[0]) setItems(prev => [...prev, data[0]]);
+    }
+    setModalSaving(false);
+    closeModal();
   }
 
   async function deleteItem() {
-    if (!editingItem) return;
+    if (editId == null) return;
     setDeleting(true);
-    await supabase.from("Inventory").delete().eq("id", editingItem.id);
-    setItems(prev => prev.filter(i => i.id !== editingItem.id));
-    setDeleting(false); setConfirmDelete(false); setEditingItem(null);
+    await supabase.from("Inventory").delete().eq("id", editId);
+    setItems(prev => prev.filter(i => i.id !== editId));
+    setDeleting(false);
+    closeModal();
   }
 
-  async function addItem() {
-    if (!newName.trim()) return;
-    setAddingSaving(true);
-    const perPackNum = Math.max(1, Math.round(Number(newPerPack) || 1));
-    const unitsNum = Math.max(0, Math.round(Number(newUnits) || 0));
-    const { data } = await supabase.from("Inventory").insert({
-      name: newName.trim(), category: newCategory,
-      units_per_pack: perPackNum, quantity: unitsNum,
-      cost: newCost || null, reorder: newReorder || null,
-    }).select();
-    if (data && data[0]) setItems(prev => [...prev, data[0]]);
-    setAddingSaving(false); setAdding(false);
-    setNewName(""); setNewCategory("Supplies"); setNewPerPack("1"); setNewUnits("0"); setNewCost(""); setNewReorder("");
+  // stats across everything
+  const counts = { total: items.length, in: 0, low: 0, out: 0 };
+  for (const i of items) {
+    const st = statusInfo(Number(i.quantity) || 0, perPack(i));
+    if (st.key === "in") counts.in++;
+    else if (st.key === "low") counts.low++;
+    else counts.out++;
   }
 
-  const cards = items.filter(i => i.category === "Cards");
-  const supplies = items.filter(i => i.category === "Supplies");
-  const branding = items.filter(i => i.category === "Branding");
+  const visible = items.filter(i => {
+    if (catFilter !== "All" && i.category !== catFilter) return false;
+    if (statusFilter) {
+      const st = statusInfo(Number(i.quantity) || 0, perPack(i));
+      if (st.key !== statusFilter) return false;
+    }
+    if (search && !i.name?.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6,
-    padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box",
-  };
-
-  if (editingItem) {
-    const per = Math.max(1, Math.round(Number(editPerPack) || 1));
-    const unitsNum = Math.max(0, Math.round(Number(editUnits) || 0));
-    return (
-      <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
-        <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-            <div>
-              <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Edit item</h1>
-              <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>{editingItem.category}</p>
-            </div>
-            <button onClick={() => setEditingItem(null)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>
-              ← Cancel
-            </button>
-          </div>
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Item name</label>
-                <input style={inputStyle} value={editName} onChange={e => setEditName(e.target.value)} />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Units per pack</label>
-                  <input style={inputStyle} type="number" min={1} step={1} placeholder="e.g. 100" value={editPerPack} onChange={e => setEditPerPack(e.target.value)} />
-                  <p style={{ fontSize: 11, color: "#444", marginTop: 5 }}>Set to 1 for items you count individually (like boxes).</p>
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>On hand (exact units) — audit</label>
-                  <input style={inputStyle} type="number" min={0} step={1} value={editUnits} onChange={e => setEditUnits(e.target.value)} />
-                  <p style={{ fontSize: 11, color: "#a78bfa", marginTop: 5 }}>{per > 1 ? `${packsLabel(unitsNum, per)} packs` : `${unitsNum} units`}</p>
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Cost per pack (or per unit)</label>
-                <input style={inputStyle} placeholder="e.g. $24 / pack or $0.24" value={editCost} onChange={e => setEditCost(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Reorder link or note</label>
-                <input style={inputStyle} placeholder="e.g. https://amazon.com/..." value={editReorder} onChange={e => setEditReorder(e.target.value)} />
-                {editReorder?.startsWith("http") && (
-                  <a href={editReorder} target="_blank" style={{ fontSize: 12, color: "#38bdf8", marginTop: 6, display: "inline-block" }}>Test link ↗</a>
-                )}
-              </div>
-            </div>
-          </div>
-          <button
-            style={{ background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", width: "100%" }}
-            onClick={saveEdit}
-            disabled={savingEdit}
-          >
-            {savingEdit ? "Saving..." : "Save changes"}
-          </button>
-
-          <div style={{ marginTop: 16, textAlign: "center" }}>
-            {confirmDelete ? (
-              <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13, color: "#f87171" }}>Delete &ldquo;{editingItem.name}&rdquo;?</span>
-                <button onClick={deleteItem} disabled={deleting} style={{ fontSize: 13, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>
-                  {deleting ? "Deleting..." : "Yes, delete"}
-                </button>
-                <button onClick={() => setConfirmDelete(false)} style={{ fontSize: 13, background: "none", border: "1px solid #333", color: "#555", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Cancel</button>
-              </div>
-            ) : (
-              <button onClick={() => setConfirmDelete(true)} style={{ fontSize: 12, background: "none", border: "1px solid #7f1d1d", color: "#f87171", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>
-                Delete item
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (adding) return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
-      <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Add item</h1>
-          <button onClick={() => setAdding(false)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Cancel</button>
-        </div>
-        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Item name</label>
-              <input style={inputStyle} placeholder="e.g. Team Bags" value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Category</label>
-                <select style={inputStyle} value={newCategory} onChange={e => setNewCategory(e.target.value)}>
-                  <option value="Supplies">Supplies</option>
-                  <option value="Cards">Cards</option>
-                  <option value="Branding">Branding</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Units per pack</label>
-                <input style={inputStyle} type="number" min={1} step={1} placeholder="e.g. 100" value={newPerPack} onChange={e => setNewPerPack(e.target.value)} />
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>On hand (units)</label>
-                <input style={inputStyle} type="number" min={0} step={1} value={newUnits} onChange={e => setNewUnits(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Cost (optional)</label>
-                <input style={inputStyle} placeholder="e.g. $24 / pack" value={newCost} onChange={e => setNewCost(e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Reorder link or note (optional)</label>
-              <input style={inputStyle} placeholder="e.g. https://amazon.com/..." value={newReorder} onChange={e => setNewReorder(e.target.value)} />
-            </div>
-          </div>
-        </div>
-        <button style={{ background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", width: "100%" }} onClick={addItem} disabled={addingSaving || !newName.trim()}>
-          {addingSaving ? "Adding..." : "Add item"}
-        </button>
-      </div>
-    </div>
-  );
+  const tiles = [
+    { key: null, label: "All items", value: counts.total, color: "#a78bfa" },
+    { key: "in", label: "In stock", value: counts.in, color: "#4ade80" },
+    { key: "low", label: "Low stock", value: counts.low, color: "#fb923c" },
+    { key: "out", label: "Out of stock", value: counts.out, color: "#f87171" },
+  ];
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
       <style>{`
-        @media (max-width: 768px) { .inv-header { display: none !important; } }
+        .inv-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+        .inv-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        @media (max-width: 640px) {
+          .inv-tiles { grid-template-columns: repeat(2, 1fr); }
+        }
       `}</style>
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
+
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px 60px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Inventory</h1>
-            <p style={{ color: "#555", fontSize: 13 }}>Tracked by the pack · − / + adds or removes a whole pack · type an exact count to audit</p>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, letterSpacing: "-0.5px" }}>Inventory</h1>
+            <p style={{ color: "#555", fontSize: 13, marginTop: 4 }}>
+              Tracked by the pack · −/+ moves a whole pack · type an exact count to audit
+              {saving && <span style={{ color: "#666", marginLeft: 8 }}>Saving…</span>}
+              {saved && <span style={{ color: "#4ade80", marginLeft: 8 }}>✓ Saved</span>}
+            </p>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {saving && <span style={{ fontSize: 13, color: "#555" }}>Saving...</span>}
-            {saved && <span style={{ fontSize: 13, color: "#4ade80" }}>✓ Saved</span>}
-            <button onClick={() => setAdding(true)} style={{ background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>+ Add item</button>
+          <button onClick={openAdd} style={{ background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 10, padding: "11px 18px", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer", boxShadow: "0 6px 20px rgba(124,58,237,0.35)" }}>
+            + Add item
+          </button>
+        </div>
+
+        {/* Overview tiles (also filters) */}
+        <div className="inv-tiles" style={{ marginBottom: 18 }}>
+          {tiles.map(t => {
+            const isActive = statusFilter === t.key;
+            return (
+              <button
+                key={String(t.key)}
+                onClick={() => setStatusFilter(t.key)}
+                style={{
+                  textAlign: "left", cursor: "pointer",
+                  background: isActive ? t.color + "18" : "#111",
+                  border: `1px solid ${isActive ? t.color + "66" : "#1e1e1e"}`,
+                  borderRadius: 12, padding: "13px 15px", transition: "all .15s",
+                }}
+              >
+                <div style={{ fontSize: 26, fontWeight: 800, color: t.color, lineHeight: 1 }}>{t.value}</div>
+                <div style={{ fontSize: 11, color: "#888", marginTop: 5, fontWeight: 500 }}>{t.label}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Controls */}
+        <div className="inv-controls" style={{ marginBottom: 22 }}>
+          <input
+            style={{ flex: 1, minWidth: 180, background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "#e5e5e5", outline: "none", boxSizing: "border-box" }}
+            placeholder="🔍 Search items..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {["All", ...CAT_ORDER].map(c => {
+              const on = catFilter === c;
+              const col = c === "All" ? "#a78bfa" : CAT_META[c].color;
+              return (
+                <button key={c} onClick={() => setCatFilter(c)} style={{
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  padding: "8px 14px", borderRadius: 10,
+                  border: `1px solid ${on ? col + "66" : "#222"}`,
+                  background: on ? col + "18" : "#0f0f0f",
+                  color: on ? col : "#666",
+                }}>
+                  {c === "All" ? "All" : CAT_META[c].label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div style={{ marginBottom: 24 }}>
-          <input style={inputStyle} placeholder="🔍 Search items..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-
-        {items.length === 0 ? <p style={{ color: "#555" }}>Loading...</p> : <>
-          <SectionList title="Card inventory" color="#a78bfa" items={cards} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
-          <SectionList title="Supplies inventory" color="#4ade80" items={supplies} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
-          <SectionList title="Branding inventory" color="#fb923c" items={branding} onUpdate={handleUpdate} onEdit={handleEdit} search={search} />
-        </>}
+        {/* Grouped grids */}
+        {loading ? (
+          <p style={{ color: "#555" }}>Loading…</p>
+        ) : visible.length === 0 ? (
+          <div style={{ background: "#111", border: "1px dashed #222", borderRadius: 14, padding: "48px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 30, marginBottom: 10 }}>📦</div>
+            <p style={{ color: "#666", fontSize: 14, margin: 0 }}>No items match — try clearing the search or filters.</p>
+          </div>
+        ) : (
+          CAT_ORDER.filter(cat => visible.some(i => i.category === cat)).map(cat => {
+            const meta = CAT_META[cat];
+            const group = visible.filter(i => i.category === cat);
+            return (
+              <div key={cat} style={{ marginBottom: 30 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <span style={{ fontSize: 16 }}>{meta.icon}</span>
+                  <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "#e5e5e5" }}>{meta.label}</h2>
+                  <span style={{ fontSize: 11, padding: "2px 9px", borderRadius: 20, background: meta.color + "1f", color: meta.color }}>{group.length}</span>
+                  <div style={{ flex: 1, height: 1, background: "#161616" }} />
+                </div>
+                <div className="inv-grid">
+                  {group.map(item => (
+                    <ItemTile key={item.id} item={item} onQty={handleQty} onEdit={openEdit} />
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
+
+      {/* Add / Edit modal */}
+      {modal && (
+        <div
+          onClick={closeModal}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(3px)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 460, background: "#111", border: "1px solid #262626", borderRadius: 16, padding: 22, boxShadow: "0 30px 80px rgba(0,0,0,0.7)" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{modal === "add" ? "Add item" : "Edit item"}</h2>
+              <button onClick={closeModal} style={{ background: "none", border: "1px solid #262626", color: "#777", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>×</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={modalLabel}>Item name</label>
+                <input style={modalInput} placeholder="e.g. Team Bags" value={fName} onChange={e => setFName(e.target.value)} autoFocus />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={modalLabel}>Category</label>
+                  <select style={modalInput} value={fCategory} onChange={e => setFCategory(e.target.value)}>
+                    {CAT_ORDER.map(c => <option key={c} value={c}>{CAT_META[c].label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={modalLabel}>Units per pack</label>
+                  <input style={modalInput} type="number" min={1} step={1} placeholder="e.g. 100" value={fPerPack} onChange={e => setFPerPack(e.target.value)} />
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={modalLabel}>On hand (units)</label>
+                  <input style={modalInput} type="number" min={0} step={1} value={fUnits} onChange={e => setFUnits(e.target.value)} />
+                  <p style={{ fontSize: 11, color: "#a78bfa", marginTop: 5 }}>
+                    {Math.max(1, Math.round(Number(fPerPack) || 1)) > 1
+                      ? `${packsLabel(Math.max(0, Math.round(Number(fUnits) || 0)), Math.max(1, Math.round(Number(fPerPack) || 1)))} packs`
+                      : `${Math.max(0, Math.round(Number(fUnits) || 0))} units`}
+                  </p>
+                </div>
+                <div>
+                  <label style={modalLabel}>Cost (optional)</label>
+                  <input style={modalInput} placeholder="e.g. $24 / pack" value={fCost} onChange={e => setFCost(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label style={modalLabel}>Reorder link or note (optional)</label>
+                <input style={modalInput} placeholder="e.g. https://amazon.com/..." value={fReorder} onChange={e => setFReorder(e.target.value)} />
+              </div>
+            </div>
+
+            <button
+              onClick={submitModal}
+              disabled={modalSaving || !fName.trim()}
+              style={{ marginTop: 18, width: "100%", background: "linear-gradient(135deg,#7c3aed,#db2777)", border: "none", borderRadius: 10, padding: "12px", fontSize: 14, fontWeight: 700, color: "#fff", cursor: fName.trim() ? "pointer" : "not-allowed", opacity: fName.trim() ? 1 : 0.5 }}
+            >
+              {modalSaving ? "Saving…" : modal === "add" ? "Add item" : "Save changes"}
+            </button>
+
+            {modal === "edit" && (
+              <div style={{ marginTop: 14, textAlign: "center" }}>
+                {confirmDelete ? (
+                  <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, color: "#f87171" }}>Delete this item?</span>
+                    <button onClick={deleteItem} disabled={deleting} style={{ fontSize: 13, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontWeight: 600 }}>{deleting ? "Deleting…" : "Yes, delete"}</button>
+                    <button onClick={() => setConfirmDelete(false)} style={{ fontSize: 13, background: "none", border: "1px solid #333", color: "#666", borderRadius: 8, padding: "7px 14px", cursor: "pointer" }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelete(true)} style={{ fontSize: 12, background: "none", border: "1px solid #7f1d1d", color: "#f87171", borderRadius: 8, padding: "7px 16px", cursor: "pointer" }}>Delete item</button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
