@@ -3,7 +3,19 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const DEFAULT_SLIDES = [
+type Slide = {
+  id: number;
+  title: string;
+  titleAccent: string;
+  subtitle: string;
+  ctaText: string;
+  ctaLink: string;
+  ctaExternal: boolean;
+  bgColor: string;
+  image: string | null;
+};
+
+const DEFAULT_SLIDES: Slide[] = [
   {
     id: 1,
     title: "WELCOME TO THE",
@@ -32,7 +44,7 @@ const DEFAULT_SLIDES = [
     titleAccent: "VALLEY",
     subtitle: "VHH apparel coming soon. Stay tuned for drops.",
     ctaText: "Coming Soon",
-    ctaLink: "/store",
+    ctaLink: "",
     ctaExternal: false,
     bgColor: "linear-gradient(135deg, #0a0a0a 0%, #0f0a1a 100%)",
     image: null,
@@ -40,7 +52,7 @@ const DEFAULT_SLIDES = [
 ];
 
 export default function HeroSlider() {
-  const [slides, setSlides] = useState(DEFAULT_SLIDES);
+  const [slides, setSlides] = useState<Slide[]>(DEFAULT_SLIDES);
   const [current, setCurrent] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
 
@@ -48,7 +60,19 @@ export default function HeroSlider() {
     async function loadSlides() {
       const { data } = await supabase.from("hero_slides").select("*").eq("active", true).order("slide_order");
       if (data && data.length > 0) {
-        // Merge with defaults or use DB slides
+        // Use the slides configured in the Hero Slides admin page.
+        // Falls back to DEFAULT_SLIDES whenever the table has no active rows.
+        setSlides(data.map((d: any, i: number) => ({
+          id: d.id ?? i,
+          title: "",
+          titleAccent: d.title || "",
+          subtitle: d.subtitle || "",
+          ctaText: d.cta_text || "",
+          ctaLink: d.cta_link || "",
+          ctaExternal: /^https?:\/\//i.test(d.cta_link || ""),
+          bgColor: DEFAULT_SLIDES[i % DEFAULT_SLIDES.length].bgColor,
+          image: d.image_url || null,
+        })));
       }
     }
     loadSlides();
@@ -90,6 +114,16 @@ export default function HeroSlider() {
       overflow: "hidden",
       transition: "background 0.5s ease",
     }}>
+      {/* Background image (from Hero Slides admin) */}
+      {slide.image && (
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: `url(${slide.image})`,
+          backgroundSize: "cover", backgroundPosition: "center",
+          opacity: 0.4,
+        }} />
+      )}
+
       {/* Background pattern */}
       <div style={{
         position: "absolute", inset: 0,
@@ -121,12 +155,16 @@ export default function HeroSlider() {
 
         {/* Main headline */}
         <h1 style={{ margin: 0, marginBottom: 8, lineHeight: 1.05 }}>
-          <span style={{ display: "block", fontSize: "clamp(36px, 7vw, 80px)", fontWeight: 900, color: "#e5e5e5", letterSpacing: "-2px", textTransform: "uppercase" }}>
-            {slide.title}
-          </span>
-          <span style={{ display: "block", fontSize: "clamp(36px, 7vw, 80px)", fontWeight: 900, color: "#fb923c", letterSpacing: "-2px", textTransform: "uppercase", WebkitTextStroke: "1px rgba(251,146,60,0.3)" }}>
-            {slide.titleAccent}
-          </span>
+          {slide.title && (
+            <span style={{ display: "block", fontSize: "clamp(36px, 7vw, 80px)", fontWeight: 900, color: "#e5e5e5", letterSpacing: "-2px", textTransform: "uppercase" }}>
+              {slide.title}
+            </span>
+          )}
+          {slide.titleAccent && (
+            <span style={{ display: "block", fontSize: "clamp(36px, 7vw, 80px)", fontWeight: 900, color: "#fb923c", letterSpacing: "-2px", textTransform: "uppercase", WebkitTextStroke: "1px rgba(251,146,60,0.3)" }}>
+              {slide.titleAccent}
+            </span>
+          )}
         </h1>
 
         {/* Subtitle */}
@@ -136,7 +174,15 @@ export default function HeroSlider() {
 
         {/* CTA buttons */}
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          {slide.ctaExternal ? (
+          {slide.ctaText && !slide.ctaLink && (
+            <span style={{
+              padding: "14px 32px", borderRadius: 10, fontSize: 15, fontWeight: 700,
+              color: "#888", background: "rgba(255,255,255,0.06)", cursor: "default",
+            }}>
+              {slide.ctaText}
+            </span>
+          )}
+          {slide.ctaText && slide.ctaLink && (slide.ctaExternal ? (
             <a href={slide.ctaLink} target="_blank" rel="noopener noreferrer" style={{
               padding: "14px 32px", borderRadius: 10, fontSize: 15, fontWeight: 700,
               color: "#fff", textDecoration: "none",
@@ -155,7 +201,7 @@ export default function HeroSlider() {
             }}>
               {slide.ctaText}
             </Link>
-          )}
+          ))}
           <Link href="/breaks/boba" style={{
             padding: "14px 32px", borderRadius: 10, fontSize: 15, fontWeight: 700,
             color: "#fb923c", textDecoration: "none",

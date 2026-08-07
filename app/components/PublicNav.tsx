@@ -43,18 +43,6 @@ const NAV_ITEMS = [
       }
     ]
   },
-  {
-    label: "Deck Builder",
-    dropdown: [
-      {
-        heading: "Coming Soon",
-        items: [
-          { label: "Apex Madness Deck Builder", href: "/deck-builder/apex", soon: true },
-          { label: "Deck Builder", href: "/deck-builder", soon: true },
-        ]
-      }
-    ]
-  },
   { label: "Store", href: "/store", soon: true },
   {
     label: "About",
