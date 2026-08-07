@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 import { useRouter } from "next/navigation";
 
 const PERIODS = ["Last 7 days", "Last 30 days", "Last 90 days", "All time"];
@@ -28,13 +29,13 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function load() {
-      const [breaksRes, ordersRes, payoutsRes] = await Promise.all([
+      const [breaksRes, ordersAll, payoutsRes] = await Promise.all([
         supabase.from("Breaks").select("*").order("date", { ascending: true }),
-        supabase.from("BreakOrders").select("buyer_username, price, placed_at, break_id").eq("cancelled", false),
+        fetchAll(() => supabase.from("BreakOrders").select("buyer_username, price, placed_at, break_id").eq("cancelled", false)),
         supabase.from("payouts").select("*").order("month", { ascending: false }),
       ]);
       if (breaksRes.data) setBreaks(breaksRes.data);
-      if (ordersRes.data) setOrders(ordersRes.data);
+      setOrders(ordersAll);
       if (payoutsRes.data) setPayouts(payoutsRes.data);
       setLoading(false);
     }

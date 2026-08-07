@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 
 const CAT_META: Record<string, { color: string; label: string; icon: string }> = {
   Supplies: { color: "#4ade80", label: "Supplies", icon: "📦" },
@@ -155,13 +156,13 @@ export default function InventoryPage() {
 
   useEffect(() => {
     async function loadBurn() {
-      const [breaksRes, ordersRes, settingsRes] = await Promise.all([
+      const [breaksRes, ordersAll, settingsRes] = await Promise.all([
         supabase.from("Breaks").select("date, num_boxes, spots_sold, free_giveaways, jumbo_hobby_count, hobby_count, double_mega_count, blaster_count").order("date", { ascending: false }).limit(60),
-        supabase.from("BreakOrders").select("buyer_username, break_id").eq("cancelled", false),
+        fetchAll(() => supabase.from("BreakOrders").select("buyer_username, break_id").eq("cancelled", false)),
         supabase.from("settings").select("key, value"),
       ]);
       if (breaksRes.data) setBreaks(breaksRes.data);
-      if (ordersRes.data) setOrders(ordersRes.data);
+      setOrders(ordersAll);
       if (settingsRes.data) {
         const sr: Record<string, number> = {};
         let ov: Record<string, number> = {};

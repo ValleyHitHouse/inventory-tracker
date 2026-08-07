@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 import { useRouter } from "next/navigation";
 
 function startOfWeek(d: Date) {
@@ -31,10 +32,10 @@ export default function RecapPage() {
     async function load() {
       const [b, o] = await Promise.all([
         supabase.from("Breaks").select("*").order("date", { ascending: false }),
-        supabase.from("BreakOrders").select("buyer_username, price, break_id, cancelled").eq("cancelled", false),
+        fetchAll(() => supabase.from("BreakOrders").select("buyer_username, price, break_id, cancelled").eq("cancelled", false)),
       ]);
       if (b.data) setBreaks(b.data);
-      if (o.data) setOrders(o.data);
+      setOrders(o);
       setLoading(false);
     }
     load();

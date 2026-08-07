@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 import { Page, Section, StatTile, LinkButton, AlertRow, C } from "@/components/ui";
 
 function startOfWeek(d: Date) {
@@ -28,13 +29,13 @@ export default function Home() {
         supabase.from("Breaks").select("*").order("date", { ascending: false }),
         supabase.from("lotcomps").select("*").order("created_at", { ascending: false }),
         supabase.from("payouts").select("*"),
-        supabase.from("BreakOrders").select("buyer_username, price, break_id").eq("cancelled", false),
+        fetchAll(() => supabase.from("BreakOrders").select("buyer_username, price, break_id").eq("cancelled", false)),
       ]);
       if (i.data) setInv(i.data);
       if (b.data) setBreaks(b.data);
       if (l.data) setLots(l.data);
       if (p.data) setPayouts(p.data);
-      if (o.data) setOrders(o.data);
+      setOrders(o);
       setLoading(false);
     }
     load();
