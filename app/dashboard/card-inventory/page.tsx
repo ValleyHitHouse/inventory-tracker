@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { parseCSV } from "@/lib/csv";
 import { CARD_SETS as SETS } from "@/lib/cardSets";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 
 const SUBSETS = ["Chasers", "Insurance", "First Timers"];
 
@@ -49,8 +50,8 @@ export default function CardInventoryPage() {
     setLoading(true);
     const { data: gt } = await supabase.from("giveawaytotal").select("total").single();
     if (gt) setGiveawayTotal(gt.total);
-    const { data: inv } = await supabase.from("cardinventory").select("*").order("subset").order("created_at", { ascending: false });
-    if (inv) setInventory(inv);
+    const inv = await fetchAll(() => supabase.from("cardinventory").select("*").order("subset").order("created_at", { ascending: false }));
+    setInventory(inv);
     setLoading(false);
   }
 

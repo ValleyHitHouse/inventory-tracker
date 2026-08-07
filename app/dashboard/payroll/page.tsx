@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 
 const SHIPPER_TABS = ["Caitlin", "Abbi"];
 
@@ -67,12 +68,12 @@ export default function PayrollPage() {
 
   async function loadData() {
     setLoading(true);
-    const [breaksRes, shipmentsRes] = await Promise.all([
+    const [breaksRes, shipmentsAll] = await Promise.all([
       supabase.from("Breaks").select("*").not("commission_amount", "is", null).gt("commission_amount", 0).order("date", { ascending: false }),
-      supabase.from("break_shipments").select("*").order("ship_date", { ascending: false }),
+      fetchAll(() => supabase.from("break_shipments").select("*").order("ship_date", { ascending: false })),
     ]);
     if (breaksRes.data) setBreaks(breaksRes.data);
-    if (shipmentsRes.data) setShipments(shipmentsRes.data);
+    setShipments(shipmentsAll);
     setLoading(false);
   }
 

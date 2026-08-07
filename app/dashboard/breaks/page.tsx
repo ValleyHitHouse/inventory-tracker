@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { parseCSV } from "@/lib/csv";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 
 const WHATNOT_FEE = 0.112;
 const IMC_SPLIT = 0.70;
@@ -221,8 +222,8 @@ export default function Breaks() {
   }
 
   async function loadCardInventory() {
-    const { data } = await supabase.from("cardinventory").select("*").order("subset").order("hero");
-    if (data) setCardInventory(data);
+    const data = await fetchAll(() => supabase.from("cardinventory").select("*").order("subset").order("hero"));
+    setCardInventory(data);
   }
 
   async function loadInventoryPrices() {

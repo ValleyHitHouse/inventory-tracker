@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 
 const SHIPPER_RATES: Record<string, { "1": number; "2": number; "3plus": number }> = {
   Caitlin: { "1": 70, "2": 90, "3plus": 110 },
@@ -49,13 +50,13 @@ export default function BreakShipmentsPage() {
 
   async function loadData(name: string, role: string) {
     setLoading(true);
-    const [shipmentsRes, breaksRes] = await Promise.all([
+    const [shipmentsAll, breaksRes] = await Promise.all([
       role === "admin"
-        ? supabase.from("break_shipments").select("*").order("created_at", { ascending: false })
-        : supabase.from("break_shipments").select("*").eq("shipper_name", name).order("created_at", { ascending: false }),
+        ? fetchAll(() => supabase.from("break_shipments").select("*").order("created_at", { ascending: false }))
+        : fetchAll(() => supabase.from("break_shipments").select("*").eq("shipper_name", name).order("created_at", { ascending: false })),
       supabase.from("Breaks").select("id, box_name, date").order("date", { ascending: false }).limit(50),
     ]);
-    if (shipmentsRes.data) setShipments(shipmentsRes.data);
+    setShipments(shipmentsAll);
     if (breaksRes.data) setBreaks(breaksRes.data);
     setLoading(false);
   }

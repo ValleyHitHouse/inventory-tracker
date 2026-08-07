@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/db";
 
 export default function GiveawaysPage() {
   const [giveaways, setGiveaways] = useState<any[]>([]);
@@ -25,14 +26,14 @@ export default function GiveawaysPage() {
 
   async function loadData() {
     setLoading(true);
-    const [givRes, brkRes, cardRes] = await Promise.all([
-      supabase.from("juiced_giveaways").select("*").order("created_at", { ascending: false }),
+    const [givAll, brkRes, cardAll] = await Promise.all([
+      fetchAll(() => supabase.from("juiced_giveaways").select("*").order("created_at", { ascending: false })),
       supabase.from("Breaks").select("id, box_name, date").order("date", { ascending: false }).limit(50),
-      supabase.from("cardinventory").select("*").gt("quantity", 0).order("subset").order("hero"),
+      fetchAll(() => supabase.from("cardinventory").select("*").gt("quantity", 0).order("subset").order("hero")),
     ]);
-    if (givRes.data) setGiveaways(givRes.data);
+    setGiveaways(givAll);
     if (brkRes.data) setBreaks(brkRes.data);
-    if (cardRes.data) setCardInventory(cardRes.data);
+    setCardInventory(cardAll);
     setLoading(false);
   }
 
