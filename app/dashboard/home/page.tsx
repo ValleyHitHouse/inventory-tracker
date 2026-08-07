@@ -82,7 +82,7 @@ export default function Home() {
   const quickActions = [
     { label: "Run a break", desc: "Log a new break", href: "/dashboard/breaks", accent: C.orange, icon: "🎴" },
     { label: "Restock", desc: "Check & reorder supplies", href: "/dashboard/inventory", accent: C.green, icon: "📦" },
-    { label: "Get paid", desc: "Payouts & commissions", href: "/dashboard/analytics", accent: C.blue, icon: "💰" },
+    { label: "Get paid", desc: "Payroll", href: "/dashboard/payroll", accent: C.blue, icon: "💰" },
     { label: "Review week", desc: "Weekly recap", href: "/dashboard/recap", accent: C.purple, icon: "🗓️" },
   ];
 
