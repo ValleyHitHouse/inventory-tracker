@@ -23,7 +23,7 @@ const SUPPLY_ALIASES: Record<string, { match: string[]; exclude?: string[] }> = 
   "Small Boxes": { match: ["small box", "box (s)", "boxes (s)"] },
   "Medium Boxes": { match: ["medium box", "box (m)", "boxes (m)"] },
   "Large Boxes": { match: ["large box", "box (l)", "boxes (l)"] },
-  "Labels": { match: ["shipping label"], exclude: ["mag"] },
+  "Labels": { match: ["shipping label", "label"], exclude: ["mag"] },
   "Valley Stickers": { match: ["sticker"], exclude: ["mag"] },
   "Giveaway Cards": { match: ["giveaway card", "givvy card"] },
   "Mags": { match: ["magpro", "mag pro", "magnetic", "mag holder"], exclude: ["sticker", "label"] },
@@ -152,7 +152,6 @@ function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number
     "Labels": shipments + 5,
     "Valley Stickers": payShip,
     "Giveaway Cards": totalGivvy + skunkCards,
-    "Mags": totalJuiced + hitsMagd,
     "Mag Stickers": totalJuiced,
     "Mag Labels": totalJuiced,
     "Clear Bubbles": clearBubbles,
@@ -966,11 +965,7 @@ export default function Breaks() {
             </div>
             <p style={{ fontSize: 12, color: "#555", marginBottom: 14 }}>Auto-calculated from the CSV + box counts (juiced givvies detected from the line text). Edit any line before deducting — boxes start at 0, so bump the sizes you actually shipped.</p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
-                <div><div style={{ fontSize: 12, color: "#aaa" }}>Hits mag&apos;d</div><div style={{ fontSize: 10, color: "#555" }}>adds to Mags</div></div>
-                <input type="number" min={0} placeholder="0" value={hitsMagd} onChange={e => setHitsMagd(e.target.value)} style={{ ...s.smallInput, width: 55 }} />
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
                 <div><div style={{ fontSize: 12, color: "#aaa" }}>Skunk cards</div><div style={{ fontSize: 10, color: "#555" }}>adds to Giveaway Cards</div></div>
                 <input type="number" min={0} placeholder="0" value={skunkCards} onChange={e => setSkunkCards(e.target.value)} style={{ ...s.smallInput, width: 55 }} />
