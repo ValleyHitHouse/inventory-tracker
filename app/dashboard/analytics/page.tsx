@@ -22,6 +22,7 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState("Last 30 days");
   const [loading, setLoading] = useState(true);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [selectedBreaker, setSelectedBreaker] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -86,6 +87,32 @@ export default function AnalyticsPage() {
   const bestBreaks = [...filtered].sort((a, b) => parseFloat(b.net_profit || "0") - parseFloat(a.net_profit || "0")).slice(0, 5);
   const chartBreaks = filtered.slice(-12);
   const maxRevenue = Math.max(...chartBreaks.map(b => parseFloat(b.revenue || "0")), 1);
+
+  // --- Per-breaker analytics ---
+  const pctToMarket = (b: any) => {
+    const mv = parseFloat(b.market_value || "0");
+    const rbf = parseFloat(b.revenue_before_fees || "0") || parseFloat(b.revenue || "0");
+    return mv > 0 ? (rbf / mv) * 100 : 0;
+  };
+  const breakers = Array.from(new Set(breaks.map(b => b.breaker).filter(Boolean))).sort();
+  const activeBreaker = (selectedBreaker && breakers.includes(selectedBreaker)) ? selectedBreaker : (breakers[0] || "");
+  const breakerBreaks = filtered.filter(b => b.breaker === activeBreaker);
+  const bkCount = breakerBreaks.length;
+  const bkRevenue = breakerBreaks.reduce((s, b) => s + parseFloat(b.revenue || "0"), 0);
+  const bkProfit = breakerBreaks.reduce((s, b) => s + parseFloat(b.net_profit || "0"), 0);
+  const bkCommEarned = breakerBreaks.reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
+  const bkCommUnpaid = breakerBreaks.filter(b => !b.commission_paid).reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
+  const bkBoxes = breakerBreaks.reduce((s, b) => s + (parseInt(b.num_boxes) || 0), 0);
+  const bkSpots = breakerBreaks.reduce((s, b) => s + (parseInt(b.spots_sold) || 0), 0);
+  const bkAvgRevenue = bkCount > 0 ? bkRevenue / bkCount : 0;
+  const bkAvgPct = bkCount > 0 ? breakerBreaks.reduce((s, b) => s + pctToMarket(b), 0) / bkCount : 0;
+  const tierLabels = ["< 120%", "120–139%", "140–159%", "160–179%", "180%+"];
+  const tierOf = (p: number) => p < 120 ? 0 : p < 140 ? 1 : p < 160 ? 2 : p < 180 ? 3 : 4;
+  const tierCounts = [0, 0, 0, 0, 0];
+  breakerBreaks.forEach(b => { tierCounts[tierOf(pctToMarket(b))]++; });
+  const breakerChart = breakerBreaks.slice(-14);
+  const bkMaxPct = Math.max(...breakerChart.map(pctToMarket), 100);
+  const bkRecent = [...breakerBreaks].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 6);
 
   // --- Payouts ledger logic ---
   // Group all breaks by month
@@ -254,6 +281,96 @@ export default function AnalyticsPage() {
                 <div><div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>SPOTS SOLD</div><div style={{ fontSize: 14, fontWeight: 600, color: "#fb923c" }}>{lastBreak.spots_sold}</div></div>
                 <div><div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>BOBA</div><div style={{ fontSize: 14, fontWeight: 600, color: lastBreak.boba_submitted ? "#4ade80" : "#f87171" }}>{lastBreak.boba_submitted ? "✓ Yes" : "✗ No"}</div></div>
               </div>
+            </div>
+          )}
+
+          {/* Breaker performance */}
+          {breakers.length > 0 && (
+            <div style={s.section}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+                <div style={s.sectionTitle}>🎙️ Breaker performance ({period})</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {breakers.map(b => {
+                    const on = b === activeBreaker;
+                    return (
+                      <button key={b} onClick={() => setSelectedBreaker(b)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#a78bfa" : "#222"}`, background: on ? "#a78bfa22" : "#0f0f0f", color: on ? "#a78bfa" : "#666" }}>{b}</button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {breakerBreaks.length === 0 ? (
+                <p style={{ color: "#555", fontSize: 13 }}>No breaks for {activeBreaker} in this period.</p>
+              ) : (
+                <>
+                  <div className="an-grid-4" style={{ marginBottom: 12 }}>
+                    <StatBox label="Breaks run" value={bkCount} color="#e5e5e5" sub={`${bkBoxes} boxes · ${bkSpots} spots`} />
+                    <StatBox label="Revenue" value={`$${bkRevenue.toFixed(0)}`} color="#4ade80" sub={`$${bkAvgRevenue.toFixed(0)}/break`} />
+                    <StatBox label="Net profit" value={`$${bkProfit.toFixed(0)}`} color={bkProfit >= 0 ? "#a78bfa" : "#f87171"} />
+                    <StatBox label="Avg % to market" value={`${bkAvgPct.toFixed(0)}%`} color={bkAvgPct >= 100 ? "#4ade80" : "#fb923c"} />
+                  </div>
+                  <div className="an-grid-2" style={{ marginBottom: 16 }}>
+                    <StatBox label="Commission earned" value={`$${bkCommEarned.toFixed(2)}`} color="#a78bfa" />
+                    <StatBox label="Commission unpaid" value={`$${bkCommUnpaid.toFixed(2)}`} color={bkCommUnpaid > 0 ? "#fb923c" : "#4ade80"} sub={bkCommUnpaid > 0 ? "Owed" : "All paid ✓"} />
+                  </div>
+
+                  {/* % to market trend */}
+                  <div style={{ background: "#0f0f0f", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 10 }}>% to market per break</div>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120, overflowX: "auto" }}>
+                      {breakerChart.map((b, i) => {
+                        const p = pctToMarket(b);
+                        const h = Math.max((p / bkMaxPct) * 100, 4);
+                        return (
+                          <div key={i} onClick={() => router.push(`/breaks/${b.id}`)} style={{ flex: "0 0 auto", minWidth: 26, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                            <div style={{ fontSize: 9, color: "#555" }}>{p.toFixed(0)}%</div>
+                            <div style={{ width: "100%", minWidth: 22, height: h, background: p >= 100 ? "linear-gradient(180deg,#4ade80,#16a34a)" : "linear-gradient(180deg,#fb923c,#c2410c)", borderRadius: "4px 4px 0 0" }} />
+                            <div style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{b.date?.slice(5)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Tier distribution + recent breaks */}
+                  <div className="an-bottom-grid" style={{ marginBottom: 0 }}>
+                    <div style={{ background: "#0f0f0f", borderRadius: 10, padding: 16 }}>
+                      <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 12 }}>Commission tier distribution</div>
+                      {tierLabels.map((label, i) => {
+                        const c = tierCounts[i];
+                        const maxC = Math.max(...tierCounts, 1);
+                        return (
+                          <div key={label} style={{ marginBottom: 9 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#777", marginBottom: 3 }}>
+                              <span>{label}</span><span style={{ color: "#aaa" }}>{c} break{c !== 1 ? "s" : ""}</span>
+                            </div>
+                            <div style={{ height: 8, background: "#161616", borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ width: `${(c / maxC) * 100}%`, height: "100%", background: "#a78bfa", borderRadius: 4 }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ background: "#0f0f0f", borderRadius: 10, padding: 16 }}>
+                      <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 12 }}>Recent breaks</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {bkRecent.map((b, i) => (
+                          <div key={i} onClick={() => router.push(`/breaks/${b.id}`)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#111", borderRadius: 8, cursor: "pointer" }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.box_name || b.date}</div>
+                              <div style={{ fontSize: 11, color: "#555" }}>{b.date} · {pctToMarket(b).toFixed(0)}% to mkt</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
+                              <div style={{ fontSize: 13, color: "#a78bfa", fontWeight: 600 }}>${parseFloat(b.commission_amount || "0").toFixed(2)}</div>
+                              <div style={{ fontSize: 11, color: "#555" }}>comm.</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
