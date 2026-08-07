@@ -100,18 +100,17 @@ export default function SellerLotPage() {
             <div className="seller-card-table">
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "#0f0f0f" }}>
-                  {["Type","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => (
+                  {["Hero","Treatment","Weapon","Power","Qty","Comp","Offer"].map(h => (
                     <th key={h} style={{ padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
                   {cards.map((card, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
-                      <td style={{ padding: "10px 14px" }}><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span></td>
                       <td style={{ padding: "10px 14px", color: "#e5e5e5", fontWeight: 600 }}>{card.hero}</td>
-                      <td style={{ padding: "10px 14px", color: "#a78bfa" }}>{card.athlete}</td>
                       <td style={{ padding: "10px 14px", color: "#777", fontSize: 12 }}>{card.treatment}</td>
                       <td style={{ padding: "10px 14px" }}>{card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}</td>
+                      <td style={{ padding: "10px 14px", color: "#4ade80" }}>{card.power ? "⚡" + card.power : "—"}</td>
                       <td style={{ padding: "10px 14px", color: "#aaa" }}>{card.quantity}</td>
                       <td style={{ padding: "10px 14px", color: "#aaa" }}>${parseFloat(card.comp_value || "0").toFixed(2)}</td>
                       <td style={{ padding: "10px 14px", color: "#4ade80", fontWeight: 600 }}>${parseFloat(card.offer_value || "0").toFixed(2)}</td>
@@ -128,7 +127,6 @@ export default function SellerLotPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>{card.hero}</div>
-                      <div style={{ fontSize: 12, color: "#a78bfa", marginTop: 2 }}>{card.athlete}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: "#4ade80" }}>${parseFloat(card.offer_value || "0").toFixed(2)}</div>
@@ -136,9 +134,9 @@ export default function SellerLotPage() {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span>
                     {card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}
                     {card.treatment && <span style={{ fontSize: 11, color: "#555" }}>{card.treatment}</span>}
+                    {card.power && <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>⚡{card.power}</span>}
                     <span style={{ fontSize: 11, color: "#555" }}>Qty: {card.quantity}</span>
                   </div>
                 </div>

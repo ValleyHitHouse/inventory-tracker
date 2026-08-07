@@ -91,18 +91,17 @@ function SellerView({ id }: { id: string }) {
             <div className="seller-card-table">
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "#0f0f0f" }}>
-                  {["Type","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => (
+                  {["Hero","Treatment","Weapon","Power","Qty","Comp","Offer"].map(h => (
                     <th key={h} style={{ padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
                   {cards.map((card, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
-                      <td style={{ padding: "10px 14px" }}><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span></td>
                       <td style={{ padding: "10px 14px", color: "#e5e5e5", fontWeight: 600 }}>{card.hero}</td>
-                      <td style={{ padding: "10px 14px", color: "#a78bfa" }}>{card.athlete}</td>
                       <td style={{ padding: "10px 14px", color: "#777", fontSize: 12 }}>{card.treatment}</td>
                       <td style={{ padding: "10px 14px" }}>{card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}</td>
+                      <td style={{ padding: "10px 14px", color: "#4ade80" }}>{card.power ? "⚡" + card.power : "—"}</td>
                       <td style={{ padding: "10px 14px", color: "#aaa" }}>{card.quantity}</td>
                       <td style={{ padding: "10px 14px", color: "#aaa" }}>${parseFloat(card.comp_value || "0").toFixed(2)}</td>
                       <td style={{ padding: "10px 14px", color: "#4ade80", fontWeight: 600 }}>${parseFloat(card.offer_value || "0").toFixed(2)}</td>
@@ -117,7 +116,6 @@ function SellerView({ id }: { id: string }) {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>{card.hero}</div>
-                      <div style={{ fontSize: 12, color: "#a78bfa", marginTop: 2 }}>{card.athlete}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 16, fontWeight: 700, color: "#4ade80" }}>${parseFloat(card.offer_value || "0").toFixed(2)}</div>
@@ -125,9 +123,9 @@ function SellerView({ id }: { id: string }) {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span>
                     {card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}
                     {card.treatment && <span style={{ fontSize: 11, color: "#555" }}>{card.treatment}</span>}
+                    {card.power && <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>⚡{card.power}</span>}
                     <span style={{ fontSize: 11, color: "#555" }}>Qty: {card.quantity}</span>
                     <span style={{ fontSize: 11, color: "#777" }}>Comp: ${parseFloat(card.comp_value || "0").toFixed(2)}</span>
                   </div>
@@ -306,6 +304,7 @@ export default function LotCompPage() {
         athlete: c.athlete,
         treatment: c.treatment,
         weapon: c.weapon,
+        power: c.power,
         set_name: c.set_name,
         subset: c.subset,
         quantity: c._qty,
@@ -341,6 +340,7 @@ export default function LotCompPage() {
         athlete: card["Athlete Inspiration"],
         treatment: card.Treatment,
         weapon: card.Weapon,
+        power: card.Power,
         set_name: SETS[editSelectedSet].label,
         subset: editActiveSubset,
         _comp: "",
@@ -396,7 +396,7 @@ export default function LotCompPage() {
       const cardRows = Object.values(pickedCards).map(({ card, qty, comp, subset }) => ({
         lot_id: lot.id, card_number: card["Card #"], hero: card.Hero,
         athlete: card["Athlete Inspiration"], treatment: card.Treatment,
-        weapon: card.Weapon, set_name: SETS[selectedSet].label, subset, quantity: qty,
+        weapon: card.Weapon, power: card.Power, set_name: SETS[selectedSet].label, subset, quantity: qty,
         comp_value: parseFloat(comp || "0"),
         offer_value: parseFloat(comp || "0") * (parseFloat(offerPercent || "0") / 100),
       }));
@@ -438,7 +438,7 @@ export default function LotCompPage() {
     }
     const subsetToId: Record<string, number> = { Chasers: 4, Insurance: 3, "First Timers": 2 };
     for (const card of lotCards) {
-      await supabase.from("cardinventory").insert({ subset: card.subset, card_number: card.card_number, hero: card.hero, athlete: card.athlete, variation: card.treatment, weapon: card.weapon, set_name: card.set_name, quantity: card.quantity, price_paid: card.offer_value });
+      await supabase.from("cardinventory").insert({ subset: card.subset, card_number: card.card_number, hero: card.hero, athlete: card.athlete, variation: card.treatment, weapon: card.weapon, power: card.power, set_name: card.set_name, quantity: card.quantity, price_paid: card.offer_value });
       const invId = subsetToId[card.subset];
       if (invId) {
         const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
@@ -606,19 +606,18 @@ export default function LotCompPage() {
                     <div className="lc-detail-cards-table">
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                         <thead><tr style={{ background: "#0f0f0f" }}>
-                          {["Subset","#","Hero","Athlete","Treatment","Weapon","Qty","Comp","Offer"].map(h => (
+                          {["#","Hero","Treatment","Weapon","Power","Qty","Comp","Offer"].map(h => (
                             <th key={h} style={{ padding: "10px 14px", textAlign: "left" as const, color: "#444", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: ".4px", borderBottom: "1px solid #1e1e1e" }}>{h}</th>
                           ))}
                         </tr></thead>
                         <tbody>
                           {lotCards.map((card, i) => (
                             <tr key={i} style={{ borderBottom: "1px solid #161616" }}>
-                              <td style={{ padding: "11px 14px" }}><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span></td>
                               <td style={{ padding: "11px 14px", color: "#555", fontFamily: "monospace" }}>{card.card_number}</td>
                               <td style={{ padding: "11px 14px", color: "#e5e5e5", fontWeight: 600 }}>{card.hero}</td>
-                              <td style={{ padding: "11px 14px", color: "#a78bfa" }}>{card.athlete}</td>
                               <td style={{ padding: "11px 14px", color: "#777" }}>{card.treatment}</td>
                               <td style={{ padding: "11px 14px" }}>{card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}</td>
+                              <td style={{ padding: "11px 14px", color: "#4ade80" }}>{card.power ? "⚡" + card.power : "—"}</td>
                               <td style={{ padding: "11px 14px", color: "#aaa" }}>{card.quantity}</td>
                               <td style={{ padding: "11px 14px", color: "#e5e5e5" }}>${parseFloat(card.comp_value).toFixed(2)}</td>
                               <td style={{ padding: "11px 14px", color: "#4ade80", fontWeight: 600 }}>${parseFloat(card.offer_value).toFixed(2)}</td>
@@ -633,7 +632,6 @@ export default function LotCompPage() {
                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 700 }}>{card.hero}</div>
-                              <div style={{ fontSize: 12, color: "#a78bfa" }}>{card.athlete}</div>
                             </div>
                             <div style={{ textAlign: "right" }}>
                               <div style={{ fontSize: 15, fontWeight: 700, color: "#4ade80" }}>${parseFloat(card.offer_value).toFixed(2)}</div>
@@ -641,8 +639,9 @@ export default function LotCompPage() {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{card.subset}</span>
                             {card.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.weapon] || "#333") + "22", color: weaponColors[card.weapon] || "#aaa" }}>{card.weapon}</span>}
+                            {card.treatment && <span style={{ fontSize: 11, color: "#555" }}>{card.treatment}</span>}
+                            {card.power && <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>⚡{card.power}</span>}
                             <span style={{ fontSize: 11, color: "#555" }}>Qty: {card.quantity}</span>
                           </div>
                         </div>
@@ -756,8 +755,9 @@ export default function LotCompPage() {
                         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                           <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                           <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
-                          <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                           {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
+                          {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
+                          {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                         </div>
                         <span style={{ fontSize: 11, color: "#a78bfa" }}>+ Add</span>
                       </div>
@@ -818,9 +818,9 @@ export default function LotCompPage() {
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
                     <span style={{ color: "#555", fontSize: 11, fontFamily: "monospace" }}>{card["Card #"]}</span>
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
-                    <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                     {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
                     {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
+                    {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                   </div>
                   <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8 }}>{isPicked ? "✓ Added" : "+ Add"}</span>
                 </div>
@@ -834,10 +834,10 @@ export default function LotCompPage() {
             {Object.entries(pickedCards).map(([key, { card, qty, comp, subset }]) => (
               <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #161616", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
-                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{subset}</span>
                   <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.Hero}</span>
-                  <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                   {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
+                  {card.Treatment && <span style={{ color: "#777", fontSize: 11 }}>{card.Treatment}</span>}
+                  {card.Power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{card.Power}</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
