@@ -7,9 +7,6 @@ const WHATNOT_FEE = 0.112;
 const IMC_SPLIT = 0.70;
 const VALLEY_SPLIT = 0.30;
 
-const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "Bubble mailers", "Boxes (S)", "Boxes (M)", "Boxes (L)", "MagPros"];
-const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "Shipping labels", "Packing tape", "Packing paper"];
-
 // Resolve each supply-usage line to a real inventory item by matching its
 // name, so deductions hit the right item regardless of exact spelling.
 // `match` = substrings to look for; `exclude` = substrings that disqualify.
@@ -32,6 +29,16 @@ const SUPPLY_ALIASES: Record<string, { match: string[]; exclude?: string[] }> = 
   "Card Protectors": { match: ["card protector", "protector"] },
 };
 
+// Which side of the 70/30 split each supply line's cost falls on.
+// IMC = shared 70/30, Valley = Valley-only. Keys match computeSupplyUsage().
+const SUPPLY_SIDES: Record<string, "IMC" | "Valley"> = {
+  "Bubbles": "IMC", "Clear Bubbles": "IMC", "Armalopes": "IMC", "Toploaders": "IMC",
+  "Penny Sleeves": "IMC", "Team Bags": "IMC", "Small Boxes": "IMC", "Medium Boxes": "IMC",
+  "Large Boxes": "IMC", "Card Protectors": "IMC",
+  "Labels": "Valley", "Valley Stickers": "Valley", "Giveaway Cards": "Valley",
+  "Mag Stickers": "Valley", "Mag Labels": "Valley",
+};
+
 const DEFAULT_BOX_TYPES = [
   { key: "jumbo_hobby_count", label: "Griffey Jumbo", settingsKey: "jumbo_hobby_price" },
   { key: "hobby_count", label: "Griffey Hobby", settingsKey: "hobby_price" },
@@ -43,50 +50,6 @@ const weaponColors: Record<string, string> = {
   Fire: "#fb923c", Ice: "#38bdf8", Steel: "#94a3b8",
   Gum: "#f472b6", Hex: "#a78bfa", Glow: "#4ade80", Brawl: "#f87171"
 };
-
-function calcSupplyEstimates(csvData: any[]) {
-  const payingBuyers = new Set<string>();
-  for (const row of csvData) {
-    if (parseFloat(row.original_item_price || "0") > 0) payingBuyers.add(row.buyer_username);
-  }
-  const estimates: Record<string, number> = {
-    "Armalopes": 0, "Toploaders": 0, "Penny sleeves": 0,
-    "Giveaway cards": 0, "Team bags": 0, "Bubble mailers": 0,
-    "Stickers": 0, "Boxes (S)": 0,
-  };
-  const buyerOrderCounts: Record<string, number> = {};
-  for (const row of csvData) {
-    const price = parseFloat(row.original_item_price || "0");
-    const buyer = row.buyer_username;
-    if (price === 0) {
-      estimates["Toploaders"] += 1;
-      estimates["Penny sleeves"] += 1;
-      estimates["Giveaway cards"] += 1;
-      estimates["Team bags"] += 1;
-      if (!payingBuyers.has(buyer)) estimates["Armalopes"] += 1;
-    } else {
-      buyerOrderCounts[buyer] = (buyerOrderCounts[buyer] || 0) + 1;
-      const orderNum = buyerOrderCounts[buyer];
-      if (orderNum === 1) {
-        estimates["Bubble mailers"] += 1;
-        estimates["Stickers"] += 1;
-        estimates["Team bags"] += 1;
-        estimates["Toploaders"] += 2;
-        estimates["Penny sleeves"] += 3;
-      } else if (orderNum < 9) {
-        estimates["Team bags"] += 1;
-        estimates["Toploaders"] += 1;
-        estimates["Penny sleeves"] += 2;
-      } else {
-        estimates["Boxes (S)"] += 1;
-        estimates["Team bags"] += 1;
-        estimates["Toploaders"] += 1;
-        estimates["Penny sleeves"] += 2;
-      }
-    }
-  }
-  return estimates;
-}
 
 const DEFAULT_SLEEVES: Record<string, number> = {
   jumbo_hobby_count: 50, hobby_count: 17, double_mega_count: 12, blaster_count: 4,
@@ -220,11 +183,6 @@ export default function Breaks() {
   const [chaserSearch, setChaserSearch] = useState("");
   const [juicedCards, setJuicedCards] = useState<Record<string, { item: any; qty: number }>>({});
   const [chaserCards, setChaserCards] = useState<Record<string, { item: any; qty: number }>>({});
-  const [supplyEstimates, setSupplyEstimates] = useState<Record<string, number>>({});
-  const [editedEstimates, setEditedEstimates] = useState<Record<string, number>>({});
-  const [magPros, setMagPros] = useState("");
-  const [deductingSupplies, setDeductingSupplies] = useState(false);
-  const [suppliesDeducted, setSuppliesDeducted] = useState(false);
   const [hitsMagd, setHitsMagd] = useState("");
   const [skunkCards, setSkunkCards] = useState("");
   const [usageEdits, setUsageEdits] = useState<Record<string, number>>({});
@@ -237,14 +195,6 @@ export default function Breaks() {
     loadBreaks(); loadCardInventory(); loadInventoryPrices(); loadMarketPrices(); loadEmployees();
   }, []);
 
-  useEffect(() => {
-    if (csvData.length > 0) {
-      const estimates = calcSupplyEstimates(csvData);
-      setSupplyEstimates(estimates);
-      setEditedEstimates(estimates);
-      setSuppliesDeducted(false);
-    }
-  }, [csvData]);
 
   async function loadBreaks() {
     const { data } = await supabase.from("Breaks").select("*").order("date", { ascending: false });
@@ -356,8 +306,6 @@ export default function Breaks() {
 
   const chaserCost = Object.values(chaserCards).reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const juicedGivvyCardCost = Object.values(juicedCards).reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
-  const allEstimates: Record<string, number> = { ...editedEstimates, ...(magPros ? { "MagPros": parseInt(magPros) } : {}) };
-
   function getSupplyCost(name: string, qty: number): number {
     return (inventoryPrices[name] || 0) * qty;
   }
@@ -399,13 +347,22 @@ export default function Breaks() {
     setDeductingInv(false); setDeductedInv(true);
   }
 
-  const imcSupplyCost = Object.entries(allEstimates).filter(([name]) => IMC_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
-  const valleySupplyCost = Object.entries(allEstimates).filter(([name]) => VALLEY_SUPPLIES.includes(name)).reduce((sum, [name, qty]) => sum + getSupplyCost(name, qty), 0);
-  const giveawayCardCost = getSupplyCost("Giveaway cards", allEstimates["Giveaway cards"] || 0);
+  // Supply cost derives from the SAME quantities shown in the deduct list,
+  // priced at each matched inventory item's unit cost. Unmatched lines cost 0
+  // (they also don't deduct), so what you see is what you're charged.
+  function supplyLineCost(key: string): number {
+    const qty = usageValue(key);
+    if (qty <= 0) return 0;
+    const item = resolveInvItem(key);
+    if (!item) return 0;
+    return getSupplyCost(item.name, qty);
+  }
+  const imcSupplyCost = Object.keys(autoUsage).filter(k => SUPPLY_SIDES[k] === "IMC").reduce((sum, k) => sum + supplyLineCost(k), 0);
+  const valleySupplyCost = Object.keys(autoUsage).filter(k => SUPPLY_SIDES[k] === "Valley").reduce((sum, k) => sum + supplyLineCost(k), 0);
   const sharedExpenses = imcSupplyCost + chaserCost + couponTotal + parseFloat(promotionTotal || "0");
   const imcShareOfExpenses = sharedExpenses * IMC_SPLIT;
   const valleyShareOfExpenses = sharedExpenses * VALLEY_SPLIT;
-  const valleyOnlyExpenses = valleySupplyCost + juicedGivvyCardCost + giveawayCardCost;
+  const valleyOnlyExpenses = valleySupplyCost + juicedGivvyCardCost;
   const profitAfterExpenses = revenueAfterFees - sharedExpenses - valleyOnlyExpenses;
   const imcTake = profitAfterExpenses * IMC_SPLIT;
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
@@ -615,8 +572,7 @@ export default function Breaks() {
     setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
     setExtraBoxCounts({}); setSelectedBoxIds([]);
     setJuicedCards({}); setChaserCards({}); setJuicedSearch(""); setChaserSearch("");
-    setSupplyEstimates({}); setEditedEstimates({});
-    setMagPros(""); setSuppliesDeducted(false);
+    setUsageEdits({}); setDeductedInv(false);
     setPromotionTotal(""); setManualRevenueBefore("");
   }
 
@@ -981,7 +937,7 @@ export default function Breaks() {
                   <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: `1px solid ${missing ? "#fb923c44" : "#1e1e1e"}`, borderRadius: 8, padding: "10px 12px" }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 12, color: missing ? "#fb923c" : "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-                      <div style={{ fontSize: 10, color: missing ? "#fb923c" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{match ? `→ ${match.name}` : (val > 0 ? "⚠ no inventory match" : "—")}</div>
+                      <div style={{ fontSize: 10, color: missing ? "#fb923c" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{match ? `→ ${match.name}${val > 0 ? ` · $${supplyLineCost(name).toFixed(2)}` : ""}` : (val > 0 ? "⚠ no inventory match" : "—")}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, marginLeft: 8 }}>
                       <button onClick={() => setUsageEdits(prev => ({ ...prev, [name]: Math.max(0, val - 1) }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>−</button>
@@ -1029,7 +985,6 @@ export default function Breaks() {
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Valley only expenses</div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Valley supplies</span><span style={{ color: "#f87171" }}>-${valleySupplyCost.toFixed(2)}</span></div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Juiced givvy cards</span><span style={{ color: "#f87171" }}>-${juicedGivvyCardCost.toFixed(2)}</span></div>
-              <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#777" }}>Giveaway cards</span><span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span></div>
             </div>
             <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 16, marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
