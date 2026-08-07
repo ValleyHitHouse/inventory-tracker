@@ -17,6 +17,14 @@ const SLEEVE_KEYS = [
   { key: "blaster_sleeves", label: "Blaster", def: "4" },
 ];
 
+// The four built-in Griffey boxes, shown in the same list as custom boxes.
+const DEFAULT_BOXES = [
+  { label: "Griffey Jumbo", priceKey: "jumbo_hobby_price", sleeveKey: "jumbo_hobby_sleeves", sleeveDef: "50" },
+  { label: "Griffey Hobby", priceKey: "hobby_price", sleeveKey: "hobby_sleeves", sleeveDef: "17" },
+  { label: "Griffey Double Mega", priceKey: "double_mega_price", sleeveKey: "double_mega_sleeves", sleeveDef: "12" },
+  { label: "Griffey Blaster", priceKey: "blaster_price", sleeveKey: "blaster_sleeves", sleeveDef: "4" },
+];
+
 interface ExtraBoxType {
   id: string;
   label: string;
@@ -214,53 +222,6 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Default box prices */}
-        <div style={s.section}>
-          <div style={s.sectionTitle}>📦 Box market prices</div>
-          <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>Set the current market price per box — used to calculate % to market on breaks</p>
-          {loading ? <p style={{ color: "#555" }}>Loading...</p> : (
-            <div className="set-grid-2">
-              {PRICE_KEYS.map(({ key, label, desc }) => (
-                <div key={key}>
-                  <label style={s.label}>{label} <span style={{ color: "#444" }}>({desc})</span></label>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: "#555", fontSize: 13 }}>$</span>
-                    <input
-                      style={s.input}
-                      type="number" min={0} step="0.01" placeholder="0.00"
-                      value={prices[key] || ""}
-                      onChange={e => setPrices(prev => ({ ...prev, [key]: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Cards per box (toploaders + penny sleeves) */}
-        <div style={s.section}>
-          <div style={s.sectionTitle}>🃏 Cards per box</div>
-          <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>
-            How many toploaders / penny sleeves each box type burns — drives the supply deduction when a break is submitted (toploaders and penny sleeves use the same number). Custom box types set their own rate below.
-          </p>
-          {loading ? <p style={{ color: "#555" }}>Loading...</p> : (
-            <div className="set-grid-2">
-              {SLEEVE_KEYS.map(({ key, label, def }) => (
-                <div key={key}>
-                  <label style={s.label}>{label} <span style={{ color: "#444" }}>(cards/box)</span></label>
-                  <input
-                    style={s.input}
-                    type="number" min={0} step="1" placeholder={def}
-                    value={prices[key] ?? ""}
-                    onChange={e => setPrices(prev => ({ ...prev, [key]: e.target.value }))}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Whatnot fee */}
         <div style={s.section}>
           <div style={s.sectionTitle}>🎥 Whatnot fee</div>
@@ -378,17 +339,29 @@ export default function SettingsPage() {
 
         {/* Extra box types */}
         <div style={s.section}>
-          <div style={s.sectionTitle}>➕ Extra box types</div>
+          <div style={s.sectionTitle}>📦 Box types</div>
           <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>
-            Add extra box types here — they'll appear automatically in the break form alongside the default boxes
+            Every box type used on breaks — the four Griffey defaults plus any you add. Set each box&apos;s market value (drives % to market) and cards per box (drives the toploader / penny sleeve deduction).
           </p>
 
-          {extraBoxes.length === 0 && !showAddBox && (
-            <p style={{ fontSize: 13, color: "#444", marginBottom: 12 }}>No extra box types yet</p>
-          )}
-
-          {extraBoxes.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              {DEFAULT_BOXES.map(db => (
+                <div key={db.priceKey} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#e5e5e5", padding: "6px 0" }}>{db.label}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#555" }}>Market $</span>
+                    <input type="number" min={0} step="0.01" style={{ ...s.input, width: 90 }} value={prices[db.priceKey] || ""} onChange={e => setPrices(prev => ({ ...prev, [db.priceKey]: e.target.value }))} placeholder="0.00" />
+                    <span style={{ fontSize: 11, color: "#555" }}>per box</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#555" }}>Cards/box</span>
+                    <input type="number" min={0} step="1" style={{ ...s.input, width: 70 }} value={prices[db.sleeveKey] ?? ""} onChange={e => setPrices(prev => ({ ...prev, [db.sleeveKey]: e.target.value }))} placeholder={db.sleeveDef} />
+                  </div>
+                  <span style={{ fontSize: 10, color: "#444", whiteSpace: "nowrap" }}>built-in</span>
+                </div>
+              ))}
               {extraBoxes.map(box => (
                 <div key={box.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 140 }}>
@@ -428,8 +401,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
               ))}
-            </div>
-          )}
+          </div>
 
           {showAddBox ? (
             <div style={{ background: "#0f0f0f", border: "1px solid #a78bfa44", borderRadius: 8, padding: 14, marginBottom: 12 }}>

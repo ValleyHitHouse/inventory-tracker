@@ -11,10 +11,10 @@ const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "
 const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "Shipping labels", "Packing tape", "Packing paper"];
 
 const DEFAULT_BOX_TYPES = [
-  { key: "jumbo_hobby_count", label: "Jumbo Hobby", settingsKey: "jumbo_hobby_price" },
-  { key: "hobby_count", label: "Hobby", settingsKey: "hobby_price" },
-  { key: "double_mega_count", label: "Double Mega", settingsKey: "double_mega_price" },
-  { key: "blaster_count", label: "Blaster", settingsKey: "blaster_price" },
+  { key: "jumbo_hobby_count", label: "Griffey Jumbo", settingsKey: "jumbo_hobby_price" },
+  { key: "hobby_count", label: "Griffey Hobby", settingsKey: "hobby_price" },
+  { key: "double_mega_count", label: "Griffey Double Mega", settingsKey: "double_mega_price" },
+  { key: "blaster_count", label: "Griffey Blaster", settingsKey: "blaster_price" },
 ];
 
 const weaponColors: Record<string, string> = {
