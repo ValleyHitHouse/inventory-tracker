@@ -10,6 +10,28 @@ const VALLEY_SPLIT = 0.30;
 const IMC_SUPPLIES = ["Armalopes", "Toploaders", "Penny sleeves", "Team bags", "Bubble mailers", "Boxes (S)", "Boxes (M)", "Boxes (L)", "MagPros"];
 const VALLEY_SUPPLIES = ["Stickers", "Giveaway cards", "Shipping labels", "Packing tape", "Packing paper"];
 
+// Resolve each supply-usage line to a real inventory item by matching its
+// name, so deductions hit the right item regardless of exact spelling.
+// `match` = substrings to look for; `exclude` = substrings that disqualify.
+const SUPPLY_ALIASES: Record<string, { match: string[]; exclude?: string[] }> = {
+  "Bubbles": { match: ["bubble mailer", "padded mailer", "bubbles"], exclude: ["clear"] },
+  "Clear Bubbles": { match: ["clear bubble", "clear mailer"] },
+  "Armalopes": { match: ["armalope", "poly mailer", "polymailer"] },
+  "Toploaders": { match: ["toploader", "top loader"] },
+  "Penny Sleeves": { match: ["penny sleeve"] },
+  "Team Bags": { match: ["team bag"] },
+  "Small Boxes": { match: ["small box", "box (s)", "boxes (s)"] },
+  "Medium Boxes": { match: ["medium box", "box (m)", "boxes (m)"] },
+  "Large Boxes": { match: ["large box", "box (l)", "boxes (l)"] },
+  "Labels": { match: ["shipping label"], exclude: ["mag"] },
+  "Valley Stickers": { match: ["sticker"], exclude: ["mag"] },
+  "Giveaway Cards": { match: ["giveaway card", "givvy card"] },
+  "Mags": { match: ["magpro", "mag pro", "magnetic", "mag holder"], exclude: ["sticker", "label"] },
+  "Mag Stickers": { match: ["mag sticker"] },
+  "Mag Labels": { match: ["mag label"] },
+  "Card Protectors": { match: ["card protector", "protector"] },
+};
+
 const DEFAULT_BOX_TYPES = [
   { key: "jumbo_hobby_count", label: "Griffey Jumbo", settingsKey: "jumbo_hobby_price" },
   { key: "hobby_count", label: "Griffey Hobby", settingsKey: "hobby_price" },
@@ -210,6 +232,7 @@ export default function Breaks() {
   const [deductingInv, setDeductingInv] = useState(false);
   const [deductedInv, setDeductedInv] = useState(false);
   const [inventoryPrices, setInventoryPrices] = useState<Record<string, number>>({});
+  const [invItems, setInvItems] = useState<{ id: number; name: string }[]>([]);
 
   useEffect(() => {
     loadBreaks(); loadCardInventory(); loadInventoryPrices(); loadMarketPrices(); loadEmployees();
@@ -252,7 +275,7 @@ export default function Breaks() {
   }
 
   async function loadInventoryPrices() {
-    const { data } = await supabase.from("Inventory").select("name, cost");
+    const { data } = await supabase.from("Inventory").select("id, name, cost");
     if (data) {
       const prices: Record<string, number> = {};
       for (const item of data) {
@@ -260,6 +283,7 @@ export default function Breaks() {
         if (!isNaN(num)) prices[item.name] = num;
       }
       setInventoryPrices(prices);
+      setInvItems(data.map((it: any) => ({ id: it.id, name: it.name })));
     }
   }
 
@@ -349,14 +373,29 @@ export default function Breaks() {
   const autoUsage = computeSupplyUsage(csvData, Math.round(boxSleeves), parseInt(hitsMagd || "0") || 0, parseInt(skunkCards || "0") || 0);
   const usageValue = (name: string) => (usageEdits[name] ?? autoUsage[name] ?? 0);
 
+  // Resolve a supply-usage line ("Team Bags", "Mags", ...) to a real
+  // inventory item by matching its name against SUPPLY_ALIASES.
+  function resolveInvItem(key: string) {
+    const cfg = SUPPLY_ALIASES[key];
+    if (!cfg) return null;
+    return invItems.find(it => {
+      const n = (it.name || "").toLowerCase();
+      return cfg.match.some(m => n.includes(m)) && !(cfg.exclude || []).some(x => n.includes(x));
+    }) || null;
+  }
+  // usage lines that have a quantity but no matching inventory item (won't deduct)
+  const unmatchedSupplies = Object.keys(autoUsage).filter(k => usageValue(k) > 0 && !resolveInvItem(k));
+
   async function deductSupplies() {
     setDeductingInv(true);
-    for (const name of Object.keys(autoUsage)) {
-      const qty = usageValue(name);
+    for (const key of Object.keys(autoUsage)) {
+      const qty = usageValue(key);
       if (qty <= 0) continue;
-      const { data } = await supabase.from("Inventory").select("id,quantity").ilike("name", name).limit(1);
-      const row = data && data[0];
-      if (row) await supabase.from("Inventory").update({ quantity: Math.max(0, (Number(row.quantity) || 0) - qty) }).eq("id", row.id);
+      const item = resolveInvItem(key);
+      if (!item) continue; // no matching inventory item — surfaced in the UI warning
+      const { data } = await supabase.from("Inventory").select("quantity").eq("id", item.id).single();
+      const cur = Number(data?.quantity) || 0;
+      await supabase.from("Inventory").update({ quantity: Math.max(0, cur - qty) }).eq("id", item.id);
     }
     setDeductingInv(false); setDeductedInv(true);
   }
@@ -479,19 +518,6 @@ export default function Breaks() {
       if (d) setDate(d);
     };
     reader.readAsText(file);
-  }
-
-  async function deductSuppliesFromInventory() {
-    if (!magPros) return alert("Please enter the number of MagPros used!");
-    setDeductingSupplies(true);
-    const allSupplies = { ...editedEstimates, "MagPros": parseInt(magPros || "0") };
-    for (const [name, qty] of Object.entries(allSupplies)) {
-      if (qty <= 0) continue;
-      const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("name", name).single();
-      if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - qty) }).eq("id", inv.id);
-    }
-    setDeductingSupplies(false);
-    setSuppliesDeducted(true);
   }
 
   async function saveBreak() {
@@ -954,9 +980,14 @@ export default function Breaks() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
               {Object.keys(autoUsage).map(name => {
                 const val = usageValue(name);
+                const match = resolveInvItem(name);
+                const missing = val > 0 && !match;
                 return (
-                  <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 12, color: "#aaa", minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                  <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: `1px solid ${missing ? "#fb923c44" : "#1e1e1e"}`, borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 12, color: missing ? "#fb923c" : "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                      <div style={{ fontSize: 10, color: missing ? "#fb923c" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{match ? `→ ${match.name}` : (val > 0 ? "⚠ no inventory match" : "—")}</div>
+                    </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, marginLeft: 8 }}>
                       <button onClick={() => setUsageEdits(prev => ({ ...prev, [name]: Math.max(0, val - 1) }))} style={{ width: 22, height: 22, border: "1px solid #333", background: "#111", borderRadius: 4, cursor: "pointer", color: "#aaa", fontSize: 12 }}>−</button>
                       <input type="number" min={0} value={val} onChange={e => setUsageEdits(prev => ({ ...prev, [name]: parseInt(e.target.value) || 0 }))} style={{ ...s.smallInput, width: 48 }} />
@@ -973,6 +1004,11 @@ export default function Breaks() {
               {deductingInv ? "Deducting..." : deductedInv ? "✓ Deducted from inventory" : "Deduct from inventory"}
             </button>
             </div>
+            {unmatchedSupplies.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 11, color: "#fb923c", lineHeight: 1.5 }}>
+                ⚠️ No matching inventory item for: <b>{unmatchedSupplies.join(", ")}</b>. These won&apos;t be deducted until you rename or add the item on the Inventory page.
+              </div>
+            )}
           </div>
         )}
 
