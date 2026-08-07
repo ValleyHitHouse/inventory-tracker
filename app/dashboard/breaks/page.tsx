@@ -105,7 +105,7 @@ function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number
   }
   const totalOrders = totalPaid + totalGivvy + totalJuiced; // every order line
   return {
-    "Bubble mailers": totalPaid, // one per paid spot
+    "Bubble mailers": payShip + totalJuiced, // one per paying buyer + one per juiced givvy
     "Small Boxes": 0,
     "Medium Boxes": 0,
     "Large Boxes": 0,
@@ -118,8 +118,8 @@ function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number
     "Giveaway Cards": totalGivvy + skunkCards,
     "Mag Stickers": totalJuiced,
     "Mag Labels": totalJuiced,
-    "Clear Bubbles": totalOrders, // one per order
-    "Card Protectors": totalOrders, // one per clear bubble
+    "Clear Bubbles": totalPaid, // one per paid spot
+    "Card Protectors": totalPaid + totalGivvy, // one per paid spot + one per givvy
   };
 }
 
