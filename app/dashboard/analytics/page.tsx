@@ -94,12 +94,17 @@ export default function AnalyticsPage() {
     const rbf = parseFloat(b.revenue_before_fees || "0") || parseFloat(b.revenue || "0");
     return mv > 0 ? (rbf / mv) * 100 : 0;
   };
+  const ALL_BREAKERS = "All breakers";
   const breakers = Array.from(new Set(breaks.map(b => b.breaker).filter(Boolean))).sort();
-  const activeBreaker = (selectedBreaker && breakers.includes(selectedBreaker)) ? selectedBreaker : (breakers[0] || "");
-  const breakerBreaks = filtered.filter(b => b.breaker === activeBreaker);
+  const breakerTabs = [ALL_BREAKERS, ...breakers];
+  const activeBreaker = (selectedBreaker && breakerTabs.includes(selectedBreaker)) ? selectedBreaker : ALL_BREAKERS;
+  const isAllBreakers = activeBreaker === ALL_BREAKERS;
+  const breakerBreaks = isAllBreakers ? filtered : filtered.filter(b => b.breaker === activeBreaker);
   const bkCount = breakerBreaks.length;
   const bkRevenue = breakerBreaks.reduce((s, b) => s + parseFloat(b.revenue || "0"), 0);
   const bkProfit = breakerBreaks.reduce((s, b) => s + parseFloat(b.net_profit || "0"), 0);
+  const bkValley = breakerBreaks.reduce((s, b) => s + parseFloat(b.valley_take || "0"), 0);
+  const bkBoba = breakerBreaks.reduce((s, b) => s + parseFloat(b.imc_take || "0"), 0);
   const bkCommEarned = breakerBreaks.reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
   const bkCommUnpaid = breakerBreaks.filter(b => !b.commission_paid).reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
   const bkBoxes = breakerBreaks.reduce((s, b) => s + (parseInt(b.num_boxes) || 0), 0);
@@ -285,32 +290,36 @@ export default function AnalyticsPage() {
           )}
 
           {/* Breaker performance */}
-          {breakers.length > 0 && (
+          {breaks.length > 0 && (
             <div style={s.section}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-                <div style={s.sectionTitle}>🎙️ Breaker performance ({period})</div>
+                <div style={s.sectionTitle}>🎙️ {isAllBreakers ? "Overall performance" : "Breaker performance"} ({period})</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {breakers.map(b => {
+                  {breakerTabs.map(b => {
                     const on = b === activeBreaker;
+                    const isAllTab = b === ALL_BREAKERS;
+                    const accent = isAllTab ? "#4ade80" : "#a78bfa";
                     return (
-                      <button key={b} onClick={() => setSelectedBreaker(b)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#a78bfa" : "#222"}`, background: on ? "#a78bfa22" : "#0f0f0f", color: on ? "#a78bfa" : "#666" }}>{b}</button>
+                      <button key={b} onClick={() => setSelectedBreaker(b)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? accent : "#222"}`, background: on ? `${accent}22` : "#0f0f0f", color: on ? accent : "#666" }}>{b}</button>
                     );
                   })}
                 </div>
               </div>
 
               {breakerBreaks.length === 0 ? (
-                <p style={{ color: "#555", fontSize: 13 }}>No breaks for {activeBreaker} in this period.</p>
+                <p style={{ color: "#555", fontSize: 13 }}>No breaks {isAllBreakers ? "" : `for ${activeBreaker} `}in this period.</p>
               ) : (
                 <>
                   <div className="an-grid-4" style={{ marginBottom: 12 }}>
                     <StatBox label="Breaks run" value={bkCount} color="#e5e5e5" sub={`${bkBoxes} boxes · ${bkSpots} spots`} />
                     <StatBox label="Revenue" value={`$${bkRevenue.toFixed(0)}`} color="#4ade80" sub={`$${bkAvgRevenue.toFixed(0)}/break`} />
                     <StatBox label="Net profit" value={`$${bkProfit.toFixed(0)}`} color={bkProfit >= 0 ? "#a78bfa" : "#f87171"} />
-                    <StatBox label="Avg % to market" value={`${bkAvgPct.toFixed(0)}%`} color={bkAvgPct >= 100 ? "#4ade80" : "#fb923c"} />
+                    <StatBox label="Valley profit" value={`$${bkValley.toFixed(0)}`} color="#38bdf8" sub="Valley's 30% of net" />
                   </div>
-                  <div className="an-grid-2" style={{ marginBottom: 16 }}>
-                    <StatBox label="Commission earned" value={`$${bkCommEarned.toFixed(2)}`} color="#a78bfa" />
+                  <div className="an-grid-4" style={{ marginBottom: 16 }}>
+                    <StatBox label="BOBA take" value={`$${bkBoba.toFixed(0)}`} color="#fb923c" sub="BOBA's 70% of net" />
+                    <StatBox label="Avg % to market" value={`${bkAvgPct.toFixed(0)}%`} color={bkAvgPct >= 100 ? "#4ade80" : "#fb923c"} />
+                    <StatBox label="Commission earned" value={`$${bkCommEarned.toFixed(2)}`} color="#a78bfa" sub={isAllBreakers ? "All breakers" : undefined} />
                     <StatBox label="Commission unpaid" value={`$${bkCommUnpaid.toFixed(2)}`} color={bkCommUnpaid > 0 ? "#fb923c" : "#4ade80"} sub={bkCommUnpaid > 0 ? "Owed" : "All paid ✓"} />
                   </div>
 
@@ -358,7 +367,7 @@ export default function AnalyticsPage() {
                           <div key={i} onClick={() => router.push(`/breaks/${b.id}`)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#111", borderRadius: 8, cursor: "pointer" }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div style={{ fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.box_name || b.date}</div>
-                              <div style={{ fontSize: 11, color: "#555" }}>{b.date} · {pctToMarket(b).toFixed(0)}% to mkt</div>
+                              <div style={{ fontSize: 11, color: "#555" }}>{b.date} · {pctToMarket(b).toFixed(0)}% to mkt{isAllBreakers && b.breaker ? ` · ${b.breaker}` : ""}</div>
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
                               <div style={{ fontSize: 13, color: "#a78bfa", fontWeight: 600 }}>${parseFloat(b.commission_amount || "0").toFixed(2)}</div>
