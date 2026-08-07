@@ -195,8 +195,10 @@ export default function Breaks() {
   const [bobaFormTips, setBobaFormTips] = useState("0.00");
   const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
   const [cardInventory, setCardInventory] = useState<any[]>([]);
-  const [cardSearch, setCardSearch] = useState("");
-  const [pickedCards, setPickedCards] = useState<Record<string, { item: any; qty: number }>>({});
+  const [juicedSearch, setJuicedSearch] = useState("");
+  const [chaserSearch, setChaserSearch] = useState("");
+  const [juicedCards, setJuicedCards] = useState<Record<string, { item: any; qty: number }>>({});
+  const [chaserCards, setChaserCards] = useState<Record<string, { item: any; qty: number }>>({});
   const [supplyEstimates, setSupplyEstimates] = useState<Record<string, number>>({});
   const [editedEstimates, setEditedEstimates] = useState<Record<string, number>>({});
   const [magPros, setMagPros] = useState("");
@@ -329,9 +331,8 @@ export default function Breaks() {
   const juicedCount = csvData.filter(r => looksJuiced(r.product_name || "")).length;
   const percentToMarket = marketValue > 0 ? (revenueBeforeCoupons / marketValue) * 100 : 0;
 
-  const chaserCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Chasers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
-  const insuranceCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Insurance").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
-  const firstTimerCost = Object.values(pickedCards).filter(({ item }) => item.subset === "First Timers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
+  const chaserCost = Object.values(chaserCards).reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
+  const juicedGivvyCardCost = Object.values(juicedCards).reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
   const allEstimates: Record<string, number> = { ...editedEstimates, ...(magPros ? { "MagPros": parseInt(magPros) } : {}) };
 
   function getSupplyCost(name: string, qty: number): number {
@@ -366,7 +367,7 @@ export default function Breaks() {
   const sharedExpenses = imcSupplyCost + chaserCost + couponTotal + parseFloat(promotionTotal || "0");
   const imcShareOfExpenses = sharedExpenses * IMC_SPLIT;
   const valleyShareOfExpenses = sharedExpenses * VALLEY_SPLIT;
-  const valleyOnlyExpenses = valleySupplyCost + insuranceCost + firstTimerCost + giveawayCardCost;
+  const valleyOnlyExpenses = valleySupplyCost + juicedGivvyCardCost + giveawayCardCost;
   const profitAfterExpenses = revenueAfterFees - sharedExpenses - valleyOnlyExpenses;
   const imcTake = profitAfterExpenses * IMC_SPLIT;
   const valleyTake = profitAfterExpenses * VALLEY_SPLIT;
@@ -377,30 +378,94 @@ export default function Breaks() {
   const commissionSupplyDeduction = grossCommission > 0 ? totalSupplyCost * (supplyDeductionPct / 100) : 0;
   const commissionAmount = Math.max(0, grossCommission - commissionSupplyDeduction);
 
-  const filteredCardInventory = cardInventory.filter(c => {
-    if (c.quantity <= 0) return false;
-    const q = cardSearch.toLowerCase().trim();
-    const combined = [c.hero, c.athlete, c.card_number, c.subset, c.weapon, c.variation].join(" ").toLowerCase();
-    return !q || q.split(" ").filter(Boolean).every((word: string) => combined.includes(word));
-  }).slice(0, 50);
+  type Bucket = "juiced" | "chaser";
+  const bucketSetter = (b: Bucket) => (b === "juiced" ? setJuicedCards : setChaserCards);
+  // available = inventory qty minus whatever's already claimed across BOTH buckets
+  const claimedOf = (item: any) => (juicedCards[`${item.id}`]?.qty || 0) + (chaserCards[`${item.id}`]?.qty || 0);
+  const availOf = (item: any) => item.quantity - claimedOf(item);
 
-  function pickCard(item: any) {
-    const key = `${item.id}`;
-    setPickedCards(prev => {
-      const current = prev[key]?.qty || 0;
-      if (current >= item.quantity) return prev;
-      return { ...prev, [key]: { item, qty: current + 1 } };
-    });
+  function filteredCards(search: string) {
+    const q = search.toLowerCase().trim();
+    return cardInventory.filter(c => {
+      if (c.quantity <= 0) return false;
+      const combined = [c.hero, c.athlete, c.card_number, c.subset, c.weapon, c.variation].join(" ").toLowerCase();
+      return !q || q.split(" ").filter(Boolean).every((word: string) => combined.includes(word));
+    }).slice(0, 50);
   }
 
-  function updateCardQty(key: string, qty: number) {
+  function pickCard(bucket: Bucket, item: any) {
+    if (availOf(item) <= 0) return;
+    const key = `${item.id}`;
+    bucketSetter(bucket)(prev => ({ ...prev, [key]: { item, qty: (prev[key]?.qty || 0) + 1 } }));
+  }
+
+  function updateCardQty(bucket: Bucket, key: string, qty: number) {
     if (qty <= 0) {
-      setPickedCards(prev => { const n = { ...prev }; delete n[key]; return n; });
+      bucketSetter(bucket)(prev => { const n = { ...prev }; delete n[key]; return n; });
     } else {
-      const maxQty = pickedCards[key]?.item?.quantity || 999;
-      setPickedCards(prev => ({ ...prev, [key]: { ...prev[key], qty: Math.min(qty, maxQty) } }));
+      const cards = bucket === "juiced" ? juicedCards : chaserCards;
+      const other = bucket === "juiced" ? chaserCards : juicedCards;
+      const item = cards[key]?.item;
+      const maxTotal = item?.quantity ?? 999;
+      const otherQty = other[key]?.qty || 0;
+      bucketSetter(bucket)(prev => ({ ...prev, [key]: { ...prev[key], qty: Math.min(qty, maxTotal - otherQty) } }));
     }
   }
+
+  const renderCardSection = (bucket: Bucket, title: string, subtitle: string, accent: string, search: string, setSearch: (v: string) => void, cards: Record<string, { item: any; qty: number }>) => {
+    const list = filteredCards(search);
+    return (
+      <div style={s.section}>
+        <div style={{ ...s.sectionTitle, color: accent }}>{title}</div>
+        <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>{subtitle}</p>
+        <input style={{ ...s.input, marginBottom: 12 }} placeholder="🔍 Search by hero, athlete, card #, subset..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div style={{ maxHeight: 240, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8, marginBottom: 12 }}>
+          {cardInventory.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>No cards in inventory yet</div>
+          ) : list.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>No cards match your search</div>
+          ) : list.map((item, i) => {
+            const key = `${item.id}`;
+            const isPicked = !!cards[key];
+            const availableQty = availOf(item);
+            return (
+              <div key={i} onClick={() => pickCard(bucket, item)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616", cursor: availableQty > 0 ? "pointer" : "not-allowed", background: isPicked ? accent + "14" : "transparent", opacity: availableQty <= 0 ? 0.4 : 1 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+                  <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{item.hero}</span>
+                  {item.weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
+                  {item.variation && <span style={{ color: "#777", fontSize: 12 }}>{item.variation}</span>}
+                  {item.power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{item.power}</span>}
+                  {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)}</span>}
+                </div>
+                <span style={{ fontSize: 11, color: isPicked ? accent : "#555", whiteSpace: "nowrap", marginLeft: 8, flexShrink: 0 }}>{availableQty > 0 ? `${availableQty} avail` : "Out"}</span>
+              </div>
+            );
+          })}
+        </div>
+        {Object.keys(cards).length > 0 && (
+          <div style={{ border: "1px solid #1e1e1e", borderRadius: 8, overflow: "hidden" }}>
+            <div style={{ padding: "8px 14px", background: "#0f0f0f", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px" }}>Selected</div>
+            {Object.entries(cards).map(([key, { item, qty }]) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
+                  <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{item.hero}</span>
+                  {item.weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
+                  {item.variation && <span style={{ color: "#777", fontSize: 11 }}>{item.variation}</span>}
+                  {item.power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{item.power}</span>}
+                  {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)} ea</span>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => updateCardQty(bucket, key, qty - 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
+                  <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
+                  <button onClick={() => updateCardQty(bucket, key, qty + 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   function handleCSV(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -467,26 +532,36 @@ export default function Breaks() {
     }).select().single();
 
     if (brk) {
-      if (Object.keys(pickedCards).length > 0) {
+      const allPicks = [
+        ...Object.values(juicedCards).map(p => ({ ...p, kind: "Juiced Givvy" })),
+        ...Object.values(chaserCards).map(p => ({ ...p, kind: "Chaser" })),
+      ];
+      if (allPicks.length > 0) {
         await supabase.from("BreakChasers").insert(
-          Object.values(pickedCards).map(({ item, qty }) => ({
+          allPicks.map(({ item, qty, kind }) => ({
             break_id: brk.id, name: `${item.hero} (${item.athlete})`,
-            type: item.subset, quantity: qty, value: parseFloat(item.price_paid || "0"),
+            type: kind, quantity: qty, value: parseFloat(item.price_paid || "0"),
           }))
         );
-        for (const { item, qty } of Object.values(pickedCards)) {
+        // merge quantities per card id (a card can be in both buckets) before deducting
+        const perCard: Record<string, { item: any; qty: number }> = {};
+        for (const { item, qty } of allPicks) {
+          const k = `${item.id}`;
+          perCard[k] = perCard[k] ? { item, qty: perCard[k].qty + qty } : { item, qty };
+        }
+        for (const { item, qty } of Object.values(perCard)) {
           const newQty = Math.max(0, item.quantity - qty);
           if (newQty === 0) {
             await supabase.from("cardinventory").delete().eq("id", item.id);
           } else {
             await supabase.from("cardinventory").update({ quantity: newQty }).eq("id", item.id);
           }
-          const subsetToId: Record<string, number> = { Chasers: 4, Insurance: 3, "First Timers": 2 };
-          const invId = subsetToId[item.subset];
-          if (invId) {
-            const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
-            if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - qty) }).eq("id", invId);
-          }
+        }
+        // chaser cards supply counter (Inventory id 4) — juiced givvys don't touch it
+        const chaserQty = Object.values(chaserCards).reduce((s, { qty }) => s + qty, 0);
+        if (chaserQty > 0) {
+          const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", 4).single();
+          if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - chaserQty) }).eq("id", 4);
         }
       }
       if (freeGiveaways > 0) {
@@ -514,7 +589,7 @@ export default function Breaks() {
     setCsvData([]); setCsvName(""); setBoxName(""); setBreaker("");
     setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
     setExtraBoxCounts({}); setSelectedBoxIds([]);
-    setPickedCards({}); setCardSearch("");
+    setJuicedCards({}); setChaserCards({}); setJuicedSearch(""); setChaserSearch("");
     setSupplyEstimates({}); setEditedEstimates({});
     setMagPros(""); setSuppliesDeducted(false);
     setPromotionTotal(""); setManualRevenueBefore("");
@@ -810,55 +885,9 @@ export default function Breaks() {
           </div>
         </div>
 
-        <div style={s.section}>
-          <div style={s.sectionTitle}>Cards used in this break</div>
-          <p style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>Search your card inventory — selected cards will be deducted when break is saved</p>
-          <input style={{ ...s.input, marginBottom: 12 }} placeholder="🔍 Search by hero, athlete, card #, subset..." value={cardSearch} onChange={e => setCardSearch(e.target.value)} />
-          <div style={{ maxHeight: 280, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 8, marginBottom: 12 }}>
-            {cardInventory.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>No cards in inventory yet</div>
-            ) : filteredCardInventory.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>No cards match your search</div>
-            ) : filteredCardInventory.map((item, i) => {
-              const key = `${item.id}`;
-              const isPicked = !!pickedCards[key];
-              const availableQty = item.quantity - (pickedCards[key]?.qty || 0);
-              return (
-                <div key={i} onClick={() => pickCard(item)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616", cursor: availableQty > 0 ? "pointer" : "not-allowed", background: isPicked ? "#a78bfa11" : "transparent", opacity: availableQty <= 0 ? 0.4 : 1 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
-                    <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{item.hero}</span>
-                    {item.weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
-                    {item.variation && <span style={{ color: "#777", fontSize: 12 }}>{item.variation}</span>}
-                    {item.power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{item.power}</span>}
-                    {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)}</span>}
-                  </div>
-                  <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#555", whiteSpace: "nowrap", marginLeft: 8, flexShrink: 0 }}>{availableQty > 0 ? `${availableQty} avail` : "Out"}</span>
-                </div>
-              );
-            })}
-          </div>
-          {Object.keys(pickedCards).length > 0 && (
-            <div style={{ border: "1px solid #1e1e1e", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ padding: "8px 14px", background: "#0f0f0f", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px" }}>Selected for this break</div>
-              {Object.entries(pickedCards).map(([key, { item, qty }]) => (
-                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616" }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
-                    <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{item.hero}</span>
-                    {item.weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
-                    {item.variation && <span style={{ color: "#777", fontSize: 11 }}>{item.variation}</span>}
-                    {item.power && <span style={{ color: "#4ade80", fontSize: 11, fontWeight: 600 }}>⚡{item.power}</span>}
-                    {item.price_paid > 0 && <span style={{ color: "#fb923c", fontSize: 11 }}>${parseFloat(item.price_paid).toFixed(2)} ea</span>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                    <button onClick={() => updateCardQty(key, qty - 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>−</button>
-                    <span style={{ fontSize: 13, minWidth: 20, textAlign: "center" }}>{qty}</span>
-                    <button onClick={() => updateCardQty(key, qty + 1)} style={{ width: 24, height: 24, border: "1px solid #333", background: "#0f0f0f", borderRadius: 4, cursor: "pointer", color: "#aaa" }}>+</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {renderCardSection("juiced", "🧃 Juiced Givvys", "Pick the cards you're giving away as juiced givvys — their cost comes out of Valley's side. Same card pool as chasers.", "#38bdf8", juicedSearch, setJuicedSearch, juicedCards)}
+
+        {renderCardSection("chaser", "🎯 Chasers", "Chaser cards added to the break — cost is shared 70/30. Same card pool.", "#a78bfa", chaserSearch, setChaserSearch, chaserCards)}
 
         <div style={s.section}>
           <div style={s.sectionTitle}>Upload Whatnot CSV</div>
@@ -968,8 +997,7 @@ export default function Breaks() {
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }}>Valley only expenses</div>
               <div style={s.expenseRow}><span style={{ color: "#777" }}>Valley supplies</span><span style={{ color: "#f87171" }}>-${valleySupplyCost.toFixed(2)}</span></div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>Insurance cards</span><span style={{ color: "#f87171" }}>-${insuranceCost.toFixed(2)}</span></div>
-              <div style={s.expenseRow}><span style={{ color: "#777" }}>First Timer cards</span><span style={{ color: "#f87171" }}>-${firstTimerCost.toFixed(2)}</span></div>
+              <div style={s.expenseRow}><span style={{ color: "#777" }}>Juiced givvy cards</span><span style={{ color: "#f87171" }}>-${juicedGivvyCardCost.toFixed(2)}</span></div>
               <div style={{ ...s.expenseRow, borderBottom: "none" }}><span style={{ color: "#777" }}>Giveaway cards</span><span style={{ color: "#f87171" }}>-${giveawayCardCost.toFixed(2)}</span></div>
             </div>
             <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 16, marginBottom: 16 }}>
