@@ -40,10 +40,11 @@ const modalInput: React.CSSProperties = {
 };
 const modalLabel: React.CSSProperties = { fontSize: 12, color: "#888", marginBottom: 6, display: "block" };
 
-function ItemTile({ item, onQty, onEdit }: {
+function ItemTile({ item, onQty, onEdit, runway }: {
   item: any;
   onQty: (id: number, qty: number) => void;
   onEdit: (item: any) => void;
+  runway?: { breaks: number; weeks: number; est: boolean; rate: number } | null;
 }) {
   const per = perPack(item);
   const isPack = per > 1;
@@ -97,6 +98,13 @@ function ItemTile({ item, onQty, onEdit }: {
         {isLink && (
           <a href={reorderHref} target="_blank" style={{ fontSize: 11, color: "#38bdf8", textDecoration: "none", marginTop: 4, display: "inline-block" }}>Reorder ↗</a>
         )}
+        {runway && (
+          <div style={{ fontSize: 11, marginTop: 6, color: runway.breaks <= 3 ? "#fb923c" : "#666", fontWeight: runway.breaks <= 3 ? 600 : 400 }}>
+            {runway.breaks <= 3 ? "⚠️ " : "⏳ "}
+            ~{runway.breaks < 1 ? "<1" : Math.round(runway.breaks)} break{Math.round(runway.breaks) === 1 ? "" : "s"} left
+            <span style={{ color: "#555" }}> · ~{runway.weeks < 1 ? "<1" : Math.round(runway.weeks)} wk{runway.est ? " · est" : ""}</span>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto" }}>
@@ -118,6 +126,12 @@ export default function InventoryPage() {
   const [catFilter, setCatFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
+  // burn-down data
+  const [breaks, setBreaks] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [sleeveRates, setSleeveRates] = useState<Record<string, number>>({});
+  const [overrides, setOverrides] = useState<Record<string, number>>({});
+
   // unified add/edit modal
   const [modal, setModal] = useState<null | "add" | "edit">(null);
   const [editId, setEditId] = useState<number | null>(null);
@@ -127,6 +141,7 @@ export default function InventoryPage() {
   const [fUnits, setFUnits] = useState("0");
   const [fCost, setFCost] = useState("");
   const [fReorder, setFReorder] = useState("");
+  const [fPerBreak, setFPerBreak] = useState("");
   const [modalSaving, setModalSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -136,6 +151,29 @@ export default function InventoryPage() {
       if (data) setItems(data);
       setLoading(false);
     });
+  }, []);
+
+  useEffect(() => {
+    async function loadBurn() {
+      const [breaksRes, ordersRes, settingsRes] = await Promise.all([
+        supabase.from("Breaks").select("date, num_boxes, spots_sold, free_giveaways, jumbo_hobby_count, hobby_count, double_mega_count, blaster_count").order("date", { ascending: false }).limit(60),
+        supabase.from("BreakOrders").select("buyer_username, break_id").eq("cancelled", false),
+        supabase.from("settings").select("key, value"),
+      ]);
+      if (breaksRes.data) setBreaks(breaksRes.data);
+      if (ordersRes.data) setOrders(ordersRes.data);
+      if (settingsRes.data) {
+        const sr: Record<string, number> = {};
+        let ov: Record<string, number> = {};
+        settingsRes.data.forEach((r: any) => {
+          if (r.key.endsWith("_sleeves")) sr[r.key] = parseFloat(r.value) || 0;
+          if (r.key === "supply_per_break") { try { ov = JSON.parse(r.value) || {}; } catch {} }
+        });
+        setSleeveRates(sr);
+        setOverrides(ov);
+      }
+    }
+    loadBurn();
   }, []);
 
   async function handleQty(id: number, qty: number) {
@@ -149,7 +187,7 @@ export default function InventoryPage() {
   function openAdd() {
     setModal("add"); setEditId(null); setConfirmDelete(false);
     setFName(""); setFCategory(catFilter !== "All" ? catFilter : "Supplies");
-    setFPerPack("1"); setFUnits("0"); setFCost(""); setFReorder("");
+    setFPerPack("1"); setFUnits("0"); setFCost(""); setFReorder(""); setFPerBreak("");
   }
   function openEdit(item: any) {
     setModal("edit"); setEditId(item.id); setConfirmDelete(false);
@@ -159,6 +197,7 @@ export default function InventoryPage() {
     setFUnits(String(Number(item.quantity) || 0));
     setFCost(item.cost || "");
     setFReorder(item.reorder || "");
+    setFPerBreak(overrides[item.name] != null ? String(overrides[item.name]) : "");
   }
   function closeModal() { setModal(null); setEditId(null); setConfirmDelete(false); }
 
@@ -174,6 +213,15 @@ export default function InventoryPage() {
     } else {
       const { data } = await supabase.from("Inventory").insert(payload).select();
       if (data && data[0]) setItems(prev => [...prev, data[0]]);
+    }
+    // persist per-break usage override (settings JSON) when supply
+    if (fCategory === "Supplies") {
+      const val = parseFloat(fPerBreak);
+      const nextOv = { ...overrides };
+      if (fPerBreak.trim() !== "" && !isNaN(val) && val > 0) nextOv[fName.trim()] = val;
+      else delete nextOv[fName.trim()];
+      setOverrides(nextOv);
+      await supabase.from("settings").upsert({ key: "supply_per_break", value: JSON.stringify(nextOv), updated_at: new Date().toISOString() }, { onConflict: "key" });
     }
     setModalSaving(false);
     closeModal();
@@ -196,6 +244,67 @@ export default function InventoryPage() {
     else if (st.key === "low") counts.low++;
     else counts.out++;
   }
+
+  // --- Burn-down: estimate per-break usage from real break history ---
+  const SLEEVE_DEF: Record<string, number> = { jumbo_hobby_sleeves: 50, hobby_sleeves: 17, double_mega_sleeves: 12, blaster_sleeves: 4 };
+  const rateOf = (k: string) => sleeveRates[k] || SLEEVE_DEF[k] || 0;
+
+  const recent = breaks.slice(0, 20); // most recent breaks drive the pace
+  const nB = recent.length;
+  const avg = (fn: (b: any) => number) => nB > 0 ? recent.reduce((s, b) => s + fn(b), 0) / nB : 0;
+  const avgSpots = avg(b => parseInt(b.spots_sold) || 0);
+  const avgFree = avg(b => parseInt(b.free_giveaways) || 0);
+  const avgBoxSleeves = avg(b =>
+    (parseInt(b.jumbo_hobby_count) || 0) * rateOf("jumbo_hobby_sleeves") +
+    (parseInt(b.hobby_count) || 0) * rateOf("hobby_sleeves") +
+    (parseInt(b.double_mega_count) || 0) * rateOf("double_mega_sleeves") +
+    (parseInt(b.blaster_count) || 0) * rateOf("blaster_sleeves"));
+  // distinct shipments (buyers) per break, averaged
+  const shipmentsByBreak: Record<string, Set<string>> = {};
+  orders.forEach(o => { if (!o.break_id) return; (shipmentsByBreak[o.break_id] ||= new Set()).add(o.buyer_username || "?"); });
+  const shipCounts = Object.values(shipmentsByBreak).map(s => s.size);
+  const avgShipments = shipCounts.length > 0 ? shipCounts.reduce((a, b) => a + b, 0) / shipCounts.length : avgSpots;
+
+  // breaks-per-week cadence from the last 56 days
+  const now = new Date();
+  const breaksLast56 = breaks.filter(b => b.date && (now.getTime() - new Date(b.date).getTime()) / 86400000 <= 56).length;
+  const breaksPerWeek = breaksLast56 > 0 ? breaksLast56 / 8 : (nB > 0 ? 1 : 0);
+
+  // estimated units used per break, matched to item name
+  function defaultRate(name: string): number {
+    const n = (name || "").toLowerCase();
+    if (n.includes("team bag")) return avgSpots + avgFree + 10;
+    if (n.includes("bubble mailer")) return avgShipments;
+    if (n.includes("toploader")) return avgBoxSleeves + avgShipments;
+    if (n.includes("penny sleeve")) return avgBoxSleeves + avgShipments * 2;
+    if (n.includes("giveaway card")) return avgFree;
+    if (n.includes("shipping label")) return avgShipments;
+    if (n.includes("armalope")) return avgFree * 0.4;
+    if (n === "stickers" || n.includes("sticker")) return avgShipments;
+    return 0;
+  }
+  function runwayFor(item: any): { breaks: number; weeks: number; est: boolean; rate: number } | null {
+    if (item.category !== "Supplies") return null;
+    const override = overrides[item.name];
+    const rate = override != null && override > 0 ? override : defaultRate(item.name);
+    if (!rate || rate <= 0 || breaksPerWeek <= 0) return null;
+    const qty = Number(item.quantity) || 0;
+    const b = qty / rate;
+    return { breaks: b, weeks: b / breaksPerWeek, est: !(override != null && override > 0), rate };
+  }
+
+  // reorder alerts: low/out OR short runway
+  const alerts = items
+    .map(i => {
+      const st = statusInfo(Number(i.quantity) || 0, perPack(i));
+      const rw = runwayFor(i);
+      const shortRunway = rw != null && rw.breaks <= 3;
+      if (st.key === "in" && !shortRunway) return null;
+      const urgency = st.key === "out" ? 0 : (rw && rw.breaks <= 1 ? 1 : st.key === "low" ? 2 : 3);
+      return { item: i, st, rw, urgency };
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => a.urgency - b.urgency || ((a.rw?.breaks ?? 99) - (b.rw?.breaks ?? 99))) as any[];
 
   const visible = items.filter(i => {
     if (catFilter !== "All" && i.category !== catFilter) return false;
@@ -240,6 +349,37 @@ export default function InventoryPage() {
             + Add item
           </button>
         </div>
+
+        {/* Reorder alerts */}
+        {!loading && alerts.length > 0 && (
+          <div style={{ background: "#160d00", border: "1px solid #fb923c44", borderRadius: 12, padding: "14px 16px", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 15 }}>⚠️</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fb923c" }}>Reorder soon</span>
+              <span style={{ fontSize: 11, color: "#7c5a2a" }}>{alerts.length} item{alerts.length === 1 ? "" : "s"} running low</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {alerts.map(({ item, st, rw }) => {
+                const link = item.reorder?.startsWith("http") ? item.reorder : item.reorder ? `https://${item.reorder}` : null;
+                return (
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 10px", background: "#0f0a02", borderRadius: 8, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: st.color + "22", color: st.color, whiteSpace: "nowrap" }}>{st.label}</span>
+                      <span style={{ fontSize: 13, color: "#e5e5e5", fontWeight: 600 }}>{item.name}</span>
+                      <span style={{ fontSize: 11, color: "#666" }}>{Number(item.quantity) || 0} on hand</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {rw && <span style={{ fontSize: 12, color: rw.breaks <= 1 ? "#f87171" : "#fb923c", fontWeight: 600 }}>~{rw.breaks < 1 ? "<1" : Math.round(rw.breaks)} break{Math.round(rw.breaks) === 1 ? "" : "s"} left</span>}
+                      {link
+                        ? <a href={link} target="_blank" style={{ fontSize: 12, color: "#38bdf8", textDecoration: "none", fontWeight: 600 }}>Reorder ↗</a>
+                        : <button onClick={() => openEdit(item)} style={{ fontSize: 11, background: "none", border: "1px solid #333", color: "#666", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Add link</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Overview tiles (also filters) */}
         <div className="inv-tiles" style={{ marginBottom: 18 }}>
@@ -312,7 +452,7 @@ export default function InventoryPage() {
                 </div>
                 <div className="inv-grid">
                   {group.map(item => (
-                    <ItemTile key={item.id} item={item} onQty={handleQty} onEdit={openEdit} />
+                    <ItemTile key={item.id} item={item} onQty={handleQty} onEdit={openEdit} runway={runwayFor(item)} />
                   ))}
                 </div>
               </div>
@@ -372,6 +512,13 @@ export default function InventoryPage() {
                 <label style={modalLabel}>Reorder link or note (optional)</label>
                 <input style={modalInput} placeholder="e.g. https://amazon.com/..." value={fReorder} onChange={e => setFReorder(e.target.value)} />
               </div>
+              {fCategory === "Supplies" && (
+                <div>
+                  <label style={modalLabel}>Used per break (optional — overrides the estimate)</label>
+                  <input style={modalInput} type="number" min={0} step="any" placeholder="auto-estimated from break history" value={fPerBreak} onChange={e => setFPerBreak(e.target.value)} />
+                  <p style={{ fontSize: 11, color: "#555", marginTop: 5 }}>Set this to fine-tune the &ldquo;breaks left&rdquo; runway. Leave blank to use the auto estimate.</p>
+                </div>
+              )}
             </div>
 
             <button

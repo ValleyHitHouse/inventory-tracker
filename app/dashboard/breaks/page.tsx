@@ -325,6 +325,8 @@ export default function Breaks() {
   const revenueAfterFees = revenueBeforeCoupons - whatnotFees;
   const spotsSold = csvData.filter(r => parseFloat(r.original_item_price || "0") > 0).length;
   const freeGiveaways = csvData.filter(r => parseFloat(r.original_item_price || "0") === 0).length;
+  const uniqueBuyers = new Set(csvData.map(r => (r.buyer_username || "").toLowerCase().trim()).filter(Boolean)).size;
+  const juicedCount = csvData.filter(r => looksJuiced(r.product_name || "")).length;
   const percentToMarket = marketValue > 0 ? (revenueBeforeCoupons / marketValue) * 100 : 0;
 
   const chaserCost = Object.values(pickedCards).filter(({ item }) => item.subset === "Chasers").reduce((sum, { item, qty }) => sum + parseFloat(item.price_paid || "0") * qty, 0);
@@ -545,6 +547,7 @@ export default function Breaks() {
       .breaks-grid-3 { grid-template-columns: 1fr 1fr; }
       .breaks-grid-4 { grid-template-columns: 1fr 1fr; }
       .breaks-grid-4b { grid-template-columns: 1fr 1fr; }
+      .breaks-detect-grid { grid-template-columns: repeat(3,1fr) !important; row-gap: 12px !important; }
       .breaks-stat-2 { grid-template-columns: 1fr 1fr; }
       .breaks-extra-boxes { grid-template-columns: 1fr 1fr; }
     }
@@ -866,6 +869,18 @@ export default function Breaks() {
           </label>
           {csvData.length > 0 && (
             <div style={{ marginTop: 16 }}>
+              {/* One-click auto-detect summary */}
+              <div style={{ background: "#0b1a0b", border: "1px solid #4ade8033", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#4ade80", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>✅ Auto-detected from CSV</div>
+                <div className="breaks-detect-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
+                  <div><div style={{ fontSize: 20, fontWeight: 800, color: "#e5e5e5" }}>{csvData.length}</div><div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: ".4px" }}>Orders</div></div>
+                  <div><div style={{ fontSize: 20, fontWeight: 800, color: "#a78bfa" }}>{uniqueBuyers}</div><div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: ".4px" }}>Buyers</div></div>
+                  <div><div style={{ fontSize: 20, fontWeight: 800, color: "#e5e5e5" }}>{spotsSold}</div><div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: ".4px" }}>Spots</div></div>
+                  <div><div style={{ fontSize: 20, fontWeight: 800, color: "#fb923c" }}>{freeGiveaways}</div><div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: ".4px" }}>Giveaways</div></div>
+                  <div><div style={{ fontSize: 20, fontWeight: 800, color: juicedCount > 0 ? "#38bdf8" : "#444" }}>{juicedCount}</div><div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: ".4px" }}>Juiced givvys</div></div>
+                </div>
+                <div style={{ fontSize: 11, color: "#4a6a4a", marginTop: 10 }}>Spots, giveaways, coupons &amp; supply usage below are all filled in for you — juiced givvys are matched even with typos. Just set your box counts and review.</div>
+              </div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 10 }}>Revenue breakdown</div>
               {manualRevenueBefore && (
                 <div style={{ background: "#fb923c11", border: "1px solid #fb923c33", borderRadius: 8, padding: "10px 14px", marginBottom: 10, fontSize: 12, color: "#fb923c" }}>

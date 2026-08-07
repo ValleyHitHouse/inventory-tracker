@@ -127,6 +127,8 @@ export default function DashboardSidebar() {
           <div style={{ height: 1, background: "#1e1e1e", margin: "8px 12px" }} />
           <div style={{ fontSize: 10, color: "#333", textTransform: "uppercase", letterSpacing: ".6px", padding: "4px 12px" }}>Admin only</div>
           <NavLink href="/dashboard/analytics" emoji="📊" label="Analytics" />
+          <NavLink href="/dashboard/recap" emoji="🗓️" label="Weekly Recap" />
+          <NavLink href="/dashboard/box-roi" emoji="🏆" label="Box ROI" />
           <NavLink href="/dashboard/payroll" emoji="💼" label="Payroll" />
           <NavLink href="/dashboard/financials" emoji="🧾" label="Financials" />
           <NavLink href="/dashboard/giveaways" emoji="🎁" label="Giveaways" />

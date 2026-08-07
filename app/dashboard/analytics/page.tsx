@@ -23,6 +23,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [selectedBreaker, setSelectedBreaker] = useState("");
+  const [copiedLink, setCopiedLink] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -144,6 +145,86 @@ export default function AnalyticsPage() {
     const [year, month] = m.split("-");
     const date = new Date(parseInt(year), parseInt(month) - 1);
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+
+  // ---- Printable PDF statements (open in a tab → Save as PDF) ----
+  function openStatement(title: string, bodyHtml: string) {
+    const w = window.open("", "_blank");
+    if (!w) { alert("Please allow pop-ups to download the statement."); return; }
+    const generated = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+      <style>
+        *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+        body{margin:0;padding:40px;color:#111;background:#fff}
+        .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #fb923c;padding-bottom:16px;margin-bottom:22px}
+        .brand{font-size:22px;font-weight:800;color:#111;letter-spacing:-.5px}
+        .brand span{color:#fb923c}
+        h1{font-size:18px;margin:0 0 2px}
+        .muted{color:#777;font-size:12px}
+        .cards{display:flex;gap:12px;margin-bottom:22px;flex-wrap:wrap}
+        .c{flex:1;min-width:140px;border:1px solid #e5e5e5;border-radius:10px;padding:12px 14px}
+        .c .l{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:5px}
+        .c .v{font-size:22px;font-weight:800}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        th{text-align:left;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #eee;padding:8px 6px}
+        td{padding:9px 6px;border-bottom:1px solid #f0f0f0}
+        .r{text-align:right}
+        tfoot td{font-weight:800;border-top:2px solid #ddd;border-bottom:none}
+        .foot{margin-top:26px;color:#999;font-size:11px}
+        .btn{background:#fb923c;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer}
+        @media print{.noprint{display:none}}
+      </style></head>
+      <body>
+        <div class="noprint" style="margin-bottom:18px"><button class="btn" onclick="window.print()">🖨️ Print / Save as PDF</button></div>
+        <div class="head">
+          <div><div class="brand">Valley<span>HitHouse</span></div><div class="muted">valleyhithouse.com</div></div>
+          <div style="text-align:right"><h1>${title}</h1><div class="muted">Generated ${generated}</div></div>
+        </div>
+        ${bodyHtml}
+        <div class="foot">Generated automatically from the ValleyHitHouse tracker. Figures reflect data at time of generation.</div>
+      </body></html>`);
+    w.document.close();
+  }
+
+  function money(n: number) { return "$" + n.toFixed(2); }
+
+  function monthlyStatementPDF(month: string) {
+    const rows = breaks.filter(b => (b.date || "").slice(0, 7) === month).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const boba = rows.reduce((s, b) => s + parseFloat(b.imc_take || "0"), 0);
+    const valley = rows.reduce((s, b) => s + parseFloat(b.valley_take || "0"), 0);
+    const profit = rows.reduce((s, b) => s + parseFloat(b.net_profit || "0"), 0);
+    const p = payoutMap[month];
+    const body = `
+      <div class="cards">
+        <div class="c"><div class="l">Breaks</div><div class="v">${rows.length}</div></div>
+        <div class="c"><div class="l">Net profit</div><div class="v">${money(profit)}</div></div>
+        <div class="c"><div class="l" style="color:#c2410c">BOBA (70%)</div><div class="v" style="color:#c2410c">${money(boba)}</div>${p?.boba_paid_at ? `<div class="muted">Paid ${new Date(p.boba_paid_at).toLocaleDateString()}</div>` : `<div class="muted">Unpaid</div>`}</div>
+        <div class="c"><div class="l" style="color:#0369a1">Valley (30%)</div><div class="v" style="color:#0369a1">${money(valley)}</div>${p?.valley_paid_at ? `<div class="muted">Paid ${new Date(p.valley_paid_at).toLocaleDateString()}</div>` : `<div class="muted">Unpaid</div>`}</div>
+      </div>
+      <table><thead><tr><th>Date</th><th>Break</th><th class="r">Net profit</th><th class="r">BOBA</th><th class="r">Valley</th></tr></thead>
+        <tbody>${rows.map(b => `<tr><td>${b.date || ""}</td><td>${(b.box_name || "—")}</td><td class="r">${money(parseFloat(b.net_profit || "0"))}</td><td class="r">${money(parseFloat(b.imc_take || "0"))}</td><td class="r">${money(parseFloat(b.valley_take || "0"))}</td></tr>`).join("")}</tbody>
+        <tfoot><tr><td colspan="2">Total</td><td class="r">${money(profit)}</td><td class="r">${money(boba)}</td><td class="r">${money(valley)}</td></tr></tfoot>
+      </table>`;
+    openStatement(`Payout Statement — ${formatMonth(month)}`, body);
+  }
+
+  function breakerStatementPDF(breakerName: string) {
+    const rows = breaks.filter(b => (b.breaker || "").toLowerCase() === breakerName.toLowerCase()).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const earned = rows.reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
+    const paid = rows.filter(b => b.commission_paid).reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
+    const owed = earned - paid;
+    const body = `
+      <div class="cards">
+        <div class="c"><div class="l">Breaks</div><div class="v">${rows.length}</div></div>
+        <div class="c"><div class="l">Earned all-time</div><div class="v">${money(earned)}</div></div>
+        <div class="c"><div class="l" style="color:#0369a1">Paid</div><div class="v" style="color:#0369a1">${money(paid)}</div></div>
+        <div class="c"><div class="l" style="color:#c2410c">Owed</div><div class="v" style="color:#c2410c">${money(owed)}</div></div>
+      </div>
+      <table><thead><tr><th>Date</th><th>Break</th><th class="r">% to mkt</th><th class="r">Commission</th><th class="r">Status</th></tr></thead>
+        <tbody>${rows.map(b => `<tr><td>${b.date || ""}</td><td>${(b.box_name || "—")}</td><td class="r">${pctToMarket(b).toFixed(0)}%</td><td class="r">${money(parseFloat(b.commission_amount || "0"))}</td><td class="r">${b.commission_paid ? "Paid" : "Owed"}</td></tr>`).join("")}</tbody>
+        <tfoot><tr><td colspan="3">Total</td><td class="r">${money(earned)}</td><td class="r">${money(owed)} owed</td></tr></tfoot>
+      </table>`;
+    openStatement(`Commission Statement — ${breakerName}`, body);
   }
 
   async function markBobaPaid(month: string, amount: number) {
@@ -293,7 +374,21 @@ export default function AnalyticsPage() {
           {breaks.length > 0 && (
             <div style={s.section}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-                <div style={s.sectionTitle}>🎙️ {isAllBreakers ? "Overall performance" : "Breaker performance"} ({period})</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={s.sectionTitle}>🎙️ {isAllBreakers ? "Overall performance" : "Breaker performance"} ({period})</div>
+                  {!isAllBreakers && (
+                    <button
+                      onClick={() => { try { navigator.clipboard.writeText(`${window.location.origin}/breaker/${encodeURIComponent(activeBreaker)}`); setCopiedLink(activeBreaker); setTimeout(() => setCopiedLink(""), 1800); } catch {} }}
+                      style={{ fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid #2a2a2a", background: "#0f0f0f", color: copiedLink === activeBreaker ? "#4ade80" : "#888", borderRadius: 6, padding: "4px 10px", marginBottom: 14 }}
+                    >{copiedLink === activeBreaker ? "✓ Link copied" : "🔗 Share link"}</button>
+                  )}
+                  {!isAllBreakers && (
+                    <button
+                      onClick={() => breakerStatementPDF(activeBreaker)}
+                      style={{ fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid #2a2a2a", background: "#0f0f0f", color: "#888", borderRadius: 6, padding: "4px 10px", marginBottom: 14 }}
+                    >📄 PDF statement</button>
+                  )}
+                </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {breakerTabs.map(b => {
                     const on = b === activeBreaker;
@@ -564,7 +659,7 @@ export default function AnalyticsPage() {
                   </div>
 
                   {/* Overall status badge */}
-                  <div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
                     {bothPaid ? (
                       <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#4ade8022", color: "#4ade80", fontWeight: 600 }}>Settled</span>
                     ) : bobaPaid || valleyPaid ? (
@@ -572,6 +667,7 @@ export default function AnalyticsPage() {
                     ) : (
                       <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#f8717122", color: "#f87171", fontWeight: 600 }}>Unpaid</span>
                     )}
+                    <button onClick={() => monthlyStatementPDF(month)} style={{ fontSize: 10, background: "none", border: "1px solid #2a2a2a", color: "#777", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontWeight: 600 }}>📄 PDF</button>
                   </div>
                 </div>
               );
