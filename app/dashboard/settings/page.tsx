@@ -9,10 +9,19 @@ const PRICE_KEYS = [
   { key: "blaster_price", label: "Blaster", desc: "Market price per box" },
 ];
 
+// Cards-per-box (drives toploader + penny sleeve deduction per break).
+const SLEEVE_KEYS = [
+  { key: "jumbo_hobby_sleeves", label: "Jumbo Hobby", def: "50" },
+  { key: "hobby_sleeves", label: "Hobby", def: "17" },
+  { key: "double_mega_sleeves", label: "Double Mega", def: "12" },
+  { key: "blaster_sleeves", label: "Blaster", def: "4" },
+];
+
 interface ExtraBoxType {
   id: string;
   label: string;
   price: string;
+  sleeveRate?: string;
 }
 
 // Editor rows keep values as strings so inputs behave; converted to numbers on save.
@@ -32,6 +41,7 @@ export default function SettingsPage() {
   const [extraBoxes, setExtraBoxes] = useState<ExtraBoxType[]>([]);
   const [newBoxLabel, setNewBoxLabel] = useState("");
   const [newBoxPrice, setNewBoxPrice] = useState("");
+  const [newBoxSleeves, setNewBoxSleeves] = useState("");
   const [showAddBox, setShowAddBox] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -116,9 +126,10 @@ export default function SettingsPage() {
       id: `extra_${Date.now()}`,
       label: newBoxLabel.trim(),
       price: newBoxPrice || "0",
+      sleeveRate: newBoxSleeves || "0",
     };
     setExtraBoxes(prev => [...prev, newBox]);
-    setNewBoxLabel(""); setNewBoxPrice(""); setShowAddBox(false);
+    setNewBoxLabel(""); setNewBoxPrice(""); setNewBoxSleeves(""); setShowAddBox(false);
   }
 
   function removeExtraBox(id: string) {
@@ -127,6 +138,10 @@ export default function SettingsPage() {
 
   function updateExtraBoxPrice(id: string, price: string) {
     setExtraBoxes(prev => prev.map(b => b.id === id ? { ...b, price } : b));
+  }
+
+  function updateExtraBoxSleeves(id: string, sleeveRate: string) {
+    setExtraBoxes(prev => prev.map(b => b.id === id ? { ...b, sleeveRate } : b));
   }
 
   function updateExtraBoxLabel(id: string, label: string) {
@@ -138,6 +153,13 @@ export default function SettingsPage() {
     for (const { key } of PRICE_KEYS) {
       await supabase.from("settings").upsert(
         { key, value: prices[key] || "0", updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
+    }
+    for (const { key, def } of SLEEVE_KEYS) {
+      const v = prices[key];
+      await supabase.from("settings").upsert(
+        { key, value: (v === undefined || v === "") ? def : v, updated_at: new Date().toISOString() },
         { onConflict: "key" }
       );
     }
@@ -210,6 +232,29 @@ export default function SettingsPage() {
                       onChange={e => setPrices(prev => ({ ...prev, [key]: e.target.value }))}
                     />
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Cards per box (toploaders + penny sleeves) */}
+        <div style={s.section}>
+          <div style={s.sectionTitle}>🃏 Cards per box</div>
+          <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>
+            How many toploaders / penny sleeves each box type burns — drives the supply deduction when a break is submitted (toploaders and penny sleeves use the same number). Custom box types set their own rate below.
+          </p>
+          {loading ? <p style={{ color: "#555" }}>Loading...</p> : (
+            <div className="set-grid-2">
+              {SLEEVE_KEYS.map(({ key, label, def }) => (
+                <div key={key}>
+                  <label style={s.label}>{label} <span style={{ color: "#444" }}>(cards/box)</span></label>
+                  <input
+                    style={s.input}
+                    type="number" min={0} step="1" placeholder={def}
+                    value={prices[key] ?? ""}
+                    onChange={e => setPrices(prev => ({ ...prev, [key]: e.target.value }))}
+                  />
                 </div>
               ))}
             </div>
@@ -365,6 +410,16 @@ export default function SettingsPage() {
                     />
                     <span style={{ fontSize: 11, color: "#555" }}>per box</span>
                   </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#555" }}>Cards/box</span>
+                    <input
+                      type="number" min={0} step="1"
+                      style={{ ...s.input, width: 70 }}
+                      value={box.sleeveRate ?? ""}
+                      onChange={e => updateExtraBoxSleeves(box.id, e.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
                   <button
                     onClick={() => removeExtraBox(box.id)}
                     style={{ fontSize: 12, background: "#7f1d1d22", border: "1px solid #7f1d1d", color: "#f87171", borderRadius: 6, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}
@@ -399,6 +454,17 @@ export default function SettingsPage() {
                     placeholder="e.g. 89.99"
                     value={newBoxPrice}
                     onChange={e => setNewBoxPrice(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addExtraBox()}
+                  />
+                </div>
+                <div>
+                  <label style={s.label}>Cards per box (toploaders/sleeves)</label>
+                  <input
+                    style={s.input}
+                    type="number" min={0} step="1"
+                    placeholder="e.g. 20"
+                    value={newBoxSleeves}
+                    onChange={e => setNewBoxSleeves(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && addExtraBox()}
                   />
                 </div>
