@@ -23,7 +23,7 @@ const SUPPLY_ALIASES: Record<string, { match: string[]; exclude?: string[] }> = 
   "Labels": { match: ["shipping label", "label"], exclude: ["mag"] },
   "Valley Stickers": { match: ["sticker"], exclude: ["mag"] },
   "Giveaway Cards": { match: ["giveaway card", "givvy card"] },
-  "Mags": { match: ["magpro", "mag pro", "magnetic", "mag holder"], exclude: ["sticker", "label"] },
+  "Mags": { match: ["magpro", "mag pro", "magnetic", "mag holder", "mags", "mag"], exclude: ["sticker", "label", "bag"] },
   "Mag Stickers": { match: ["mag sticker"] },
   "Mag Labels": { match: ["mag label"] },
   "Card Protectors": { match: ["card protector", "protector"] },
@@ -36,7 +36,7 @@ const SUPPLY_SIDES: Record<string, "IMC" | "Valley"> = {
   "Penny Sleeves": "IMC", "Team Bags": "IMC", "Small Boxes": "IMC", "Medium Boxes": "IMC",
   "Large Boxes": "IMC", "Card Protectors": "IMC",
   "Labels": "Valley", "Valley Stickers": "Valley", "Giveaway Cards": "Valley",
-  "Mag Stickers": "Valley", "Mag Labels": "Valley",
+  "Mag Stickers": "Valley", "Mag Labels": "Valley", "Mags": "IMC",
 };
 
 const DEFAULT_BOX_TYPES = [
@@ -185,6 +185,7 @@ export default function Breaks() {
   const [chaserCards, setChaserCards] = useState<Record<string, { item: any; qty: number }>>({});
   const [hitsMagd, setHitsMagd] = useState("");
   const [skunkCards, setSkunkCards] = useState("");
+  const [magsUsed, setMagsUsed] = useState("");
   const [usageEdits, setUsageEdits] = useState<Record<string, number>>({});
   const [deductingInv, setDeductingInv] = useState(false);
   const [deductedInv, setDeductedInv] = useState(false);
@@ -317,7 +318,7 @@ export default function Breaks() {
       return sum + (boxCounts[bt.key] || 0) * rate;
     }, 0)
     + extraBoxTypes.reduce((sum, bt) => sum + (extraBoxCounts[bt.id] || 0) * (parseFloat((bt as any).sleeveRate || "0") || 0), 0);
-  const autoUsage = computeSupplyUsage(csvData, Math.round(boxSleeves), parseInt(hitsMagd || "0") || 0, parseInt(skunkCards || "0") || 0);
+  const autoUsage = { ...computeSupplyUsage(csvData, Math.round(boxSleeves), parseInt(hitsMagd || "0") || 0, parseInt(skunkCards || "0") || 0), "Mags": parseInt(magsUsed || "0") || 0 };
   const usageValue = (name: string) => (usageEdits[name] ?? autoUsage[name] ?? 0);
 
   // Resolve a supply-usage line ("Team Bags", "Mags", ...) to a real
@@ -572,7 +573,7 @@ export default function Breaks() {
     setBoxCounts({ jumbo_hobby_count: 0, hobby_count: 0, double_mega_count: 0, blaster_count: 0 });
     setExtraBoxCounts({}); setSelectedBoxIds([]);
     setJuicedCards({}); setChaserCards({}); setJuicedSearch(""); setChaserSearch("");
-    setUsageEdits({}); setDeductedInv(false);
+    setUsageEdits({}); setDeductedInv(false); setMagsUsed(""); setSkunkCards("");
     setPromotionTotal(""); setManualRevenueBefore("");
   }
 
@@ -921,7 +922,18 @@ export default function Breaks() {
             </div>
             <p style={{ fontSize: 12, color: "#555", marginBottom: 14 }}>Auto-calculated from the CSV + box counts (juiced givvies detected from the line text). Edit any line before deducting — boxes start at 0, so bump the sizes you actually shipped.</p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginBottom: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: `1px solid ${(parseInt(magsUsed || "0") || 0) > 0 && !resolveInvItem("Mags") ? "#fb923c44" : "#1e1e1e"}`, borderRadius: 8, padding: "10px 12px" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: "#aaa" }}>Mags used <span style={{ color: "#555" }}>(manual)</span></div>
+                  <div style={{ fontSize: 10, color: (parseInt(magsUsed || "0") || 0) > 0 && !resolveInvItem("Mags") ? "#fb923c" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {resolveInvItem("Mags")
+                      ? `→ ${resolveInvItem("Mags")!.name}${(parseInt(magsUsed || "0") || 0) > 0 ? ` · $${supplyLineCost("Mags").toFixed(2)}` : ""}`
+                      : ((parseInt(magsUsed || "0") || 0) > 0 ? "⚠ no inventory match" : "deducts from inventory")}
+                  </div>
+                </div>
+                <input type="number" min={0} placeholder="0" value={magsUsed} onChange={e => setMagsUsed(e.target.value)} style={{ ...s.smallInput, width: 55 }} />
+              </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "10px 12px" }}>
                 <div><div style={{ fontSize: 12, color: "#aaa" }}>Skunk cards</div><div style={{ fontSize: 10, color: "#555" }}>adds to Giveaway Cards</div></div>
                 <input type="number" min={0} placeholder="0" value={skunkCards} onChange={e => setSkunkCards(e.target.value)} style={{ ...s.smallInput, width: 55 }} />
@@ -929,7 +941,7 @@ export default function Breaks() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              {Object.keys(autoUsage).map(name => {
+              {Object.keys(autoUsage).filter(k => k !== "Mags").map(name => {
                 const val = usageValue(name);
                 const match = resolveInvItem(name);
                 const missing = val > 0 && !match;
