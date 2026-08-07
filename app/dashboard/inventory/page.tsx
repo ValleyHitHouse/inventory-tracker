@@ -151,6 +151,16 @@ export default function InventoryPage() {
   const [editUnits, setEditUnits] = useState("0");
   const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newCategory, setNewCategory] = useState("Supplies");
+  const [newPerPack, setNewPerPack] = useState("1");
+  const [newUnits, setNewUnits] = useState("0");
+  const [newCost, setNewCost] = useState("");
+  const [newReorder, setNewReorder] = useState("");
+  const [addingSaving, setAddingSaving] = useState(false);
 
   useEffect(() => {
     supabase.from("Inventory").select("*").order("id").then(({ data }) => {
@@ -184,11 +194,35 @@ export default function InventoryPage() {
 
   function handleEdit(item: any) {
     setEditingItem(item);
+    setConfirmDelete(false);
     setEditName(item.name);
     setEditCost(item.cost || "");
     setEditReorder(item.reorder || "");
     setEditPerPack(String(Number(item.units_per_pack) > 0 ? Number(item.units_per_pack) : 1));
     setEditUnits(String(Number(item.quantity) || 0));
+  }
+
+  async function deleteItem() {
+    if (!editingItem) return;
+    setDeleting(true);
+    await supabase.from("Inventory").delete().eq("id", editingItem.id);
+    setItems(prev => prev.filter(i => i.id !== editingItem.id));
+    setDeleting(false); setConfirmDelete(false); setEditingItem(null);
+  }
+
+  async function addItem() {
+    if (!newName.trim()) return;
+    setAddingSaving(true);
+    const perPackNum = Math.max(1, Math.round(Number(newPerPack) || 1));
+    const unitsNum = Math.max(0, Math.round(Number(newUnits) || 0));
+    const { data } = await supabase.from("Inventory").insert({
+      name: newName.trim(), category: newCategory,
+      units_per_pack: perPackNum, quantity: unitsNum,
+      cost: newCost || null, reorder: newReorder || null,
+    }).select();
+    if (data && data[0]) setItems(prev => [...prev, data[0]]);
+    setAddingSaving(false); setAdding(false);
+    setNewName(""); setNewCategory("Supplies"); setNewPerPack("1"); setNewUnits("0"); setNewCost(""); setNewReorder("");
   }
 
   const cards = items.filter(i => i.category === "Cards");
@@ -253,10 +287,76 @@ export default function InventoryPage() {
           >
             {savingEdit ? "Saving..." : "Save changes"}
           </button>
+
+          <div style={{ marginTop: 16, textAlign: "center" }}>
+            {confirmDelete ? (
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, color: "#f87171" }}>Delete &ldquo;{editingItem.name}&rdquo;?</span>
+                <button onClick={deleteItem} disabled={deleting} style={{ fontSize: 13, background: "#7f1d1d", border: "none", color: "#fca5a5", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>
+                  {deleting ? "Deleting..." : "Yes, delete"}
+                </button>
+                <button onClick={() => setConfirmDelete(false)} style={{ fontSize: 13, background: "none", border: "1px solid #333", color: "#555", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Cancel</button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} style={{ fontSize: 12, background: "none", border: "1px solid #7f1d1d", color: "#f87171", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>
+                Delete item
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
   }
+
+  if (adding) return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Add item</h1>
+          <button onClick={() => setAdding(false)} style={{ fontSize: 13, color: "#555", background: "none", border: "1px solid #222", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>← Cancel</button>
+        </div>
+        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Item name</label>
+              <input style={inputStyle} placeholder="e.g. Team Bags" value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Category</label>
+                <select style={inputStyle} value={newCategory} onChange={e => setNewCategory(e.target.value)}>
+                  <option value="Supplies">Supplies</option>
+                  <option value="Cards">Cards</option>
+                  <option value="Branding">Branding</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Units per pack</label>
+                <input style={inputStyle} type="number" min={1} step={1} placeholder="e.g. 100" value={newPerPack} onChange={e => setNewPerPack(e.target.value)} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>On hand (units)</label>
+                <input style={inputStyle} type="number" min={0} step={1} value={newUnits} onChange={e => setNewUnits(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Cost (optional)</label>
+                <input style={inputStyle} placeholder="e.g. $24 / pack" value={newCost} onChange={e => setNewCost(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Reorder link or note (optional)</label>
+              <input style={inputStyle} placeholder="e.g. https://amazon.com/..." value={newReorder} onChange={e => setNewReorder(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <button style={{ background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", width: "100%" }} onClick={addItem} disabled={addingSaving || !newName.trim()}>
+          {addingSaving ? "Adding..." : "Add item"}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5" }}>
@@ -272,6 +372,7 @@ export default function InventoryPage() {
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {saving && <span style={{ fontSize: 13, color: "#555" }}>Saving...</span>}
             {saved && <span style={{ fontSize: 13, color: "#4ade80" }}>✓ Saved</span>}
+            <button onClick={() => setAdding(true)} style={{ background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>+ Add item</button>
           </div>
         </div>
 
