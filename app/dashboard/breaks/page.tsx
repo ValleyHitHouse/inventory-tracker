@@ -70,6 +70,30 @@ const DEFAULT_SLEEVES: Record<string, number> = {
   jumbo_hobby_count: 50, hobby_count: 17, double_mega_count: 12, blaster_count: 4,
 };
 
+// Levenshtein edit distance — used for fuzzy "juiced" matching.
+function levDist(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => {
+    const row = new Array(n + 1).fill(0); row[0] = i; return row;
+  });
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  }
+  return dp[m][n];
+}
+
+// Detect a juiced giveaway from the line text, tolerant of misspellings
+// (juiced / jucied / jiuced / juicd / juicde ... any close typo of "juiced").
+function looksJuiced(name: string): boolean {
+  const t = (name || "").toLowerCase();
+  if (t.includes("juiced") || t.includes("jucied") || t.includes("jiuced") || t.includes("juicd")) return true;
+  for (const w of t.split(/[^a-z]+/)) {
+    if (w.length >= 4 && w.length <= 8 && levDist(w, "juiced") <= 2) return true;
+  }
+  return false;
+}
+
 // Per-break supply usage — drives the inventory deduction (kept separate from the
 // financial supply-cost estimate above, which still feeds profit/commission).
 function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number, skunkCards: number): Record<string, number> {
@@ -80,8 +104,7 @@ function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number
     if (!buyers[buyer]) buyers[buyer] = { paid: 0, juiced: 0, givvy: 0 };
     if (price > 0) buyers[buyer].paid++;
     else {
-      const txt = ((r.product_name || "") + "").toLowerCase();
-      if (txt.includes("juiced")) buyers[buyer].juiced++;
+      if (looksJuiced(r.product_name)) buyers[buyer].juiced++;
       else buyers[buyer].givvy++;
     }
   }
