@@ -11,7 +11,7 @@ const VALLEY_SPLIT = 0.30;
 // name, so deductions hit the right item regardless of exact spelling.
 // `match` = substrings to look for; `exclude` = substrings that disqualify.
 const SUPPLY_ALIASES: Record<string, { match: string[]; exclude?: string[] }> = {
-  "Bubbles": { match: ["bubble mailer", "padded mailer", "bubbles"], exclude: ["clear"] },
+  "Bubble mailers": { match: ["bubble mailer", "padded mailer", "bubbles"], exclude: ["clear"] },
   "Clear Bubbles": { match: ["clear bubble", "clear mailer"] },
   "Armalopes": { match: ["armalope", "poly mailer", "polymailer"] },
   "Toploaders": { match: ["toploader", "top loader"] },
@@ -32,7 +32,7 @@ const SUPPLY_ALIASES: Record<string, { match: string[]; exclude?: string[] }> = 
 // Which side of the 70/30 split each supply line's cost falls on.
 // IMC = shared 70/30, Valley = Valley-only. Keys match computeSupplyUsage().
 const SUPPLY_SIDES: Record<string, "IMC" | "Valley"> = {
-  "Bubbles": "IMC", "Clear Bubbles": "IMC", "Armalopes": "IMC", "Toploaders": "IMC",
+  "Bubble mailers": "IMC", "Clear Bubbles": "IMC", "Armalopes": "IMC", "Toploaders": "IMC",
   "Penny Sleeves": "IMC", "Team Bags": "IMC", "Small Boxes": "IMC", "Medium Boxes": "IMC",
   "Large Boxes": "IMC", "Card Protectors": "IMC",
   "Labels": "Valley", "Valley Stickers": "Valley", "Giveaway Cards": "Valley",
@@ -104,7 +104,7 @@ function computeSupplyUsage(csvData: any[], boxSleeves: number, hitsMagd: number
     totalJuiced += b.juiced; totalPaid += b.paid; totalGivvy += b.givvy;
   }
   return {
-    "Bubbles": bubbles,
+    "Bubble mailers": bubbles,
     "Small Boxes": 0,
     "Medium Boxes": 0,
     "Large Boxes": 0,
