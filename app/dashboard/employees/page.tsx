@@ -1,30 +1,79 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { PAGES, DEFAULT_EMPLOYEE_KEYS } from "@/lib/pages";
+
+const GROUP_LABELS: Record<string, string> = { main: "Main", admin: "Admin / office", website: "Website management" };
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [hours, setHours] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"employees" | "hours" | "add">("employees");
+  const [view, setView] = useState<"employees" | "hours" | "add" | "access">("employees");
   const [newName, setNewName] = useState("");
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
+  // Permissions editor state
+  const [permsMap, setPermsMap] = useState<Record<string, string[]>>({});
+  const [selectedUser, setSelectedUser] = useState<string>("");
+  const [draft, setDraft] = useState<string[]>([]);
+  const [savingPerms, setSavingPerms] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     setLoading(true);
-    const [empRes, hoursRes] = await Promise.all([
+    const [empRes, hoursRes, settingRes] = await Promise.all([
       supabase.from("employees").select("*").order("created_at"),
       supabase.from("employee_hours").select("*").order("date", { ascending: false }),
+      supabase.from("settings").select("value").eq("key", "employee_permissions").single(),
     ]);
     if (empRes.data) setEmployees(empRes.data);
     if (hoursRes.data) setHours(hoursRes.data);
+    if (settingRes.data?.value) {
+      try {
+        const v = settingRes.data.value;
+        setPermsMap(typeof v === "string" ? JSON.parse(v) : v);
+      } catch { setPermsMap({}); }
+    }
     setLoading(false);
   }
+
+  function permsFor(username: string): string[] {
+    return permsMap[username] ?? DEFAULT_EMPLOYEE_KEYS;
+  }
+
+  function selectUser(username: string) {
+    setSelectedUser(username);
+    setDraft(permsFor(username));
+    setSavedFlash(false);
+  }
+
+  function toggleKey(key: string) {
+    setDraft(d => d.includes(key) ? d.filter(k => k !== key) : [...d, key]);
+    setSavedFlash(false);
+  }
+
+  async function savePerms() {
+    if (!selectedUser) return;
+    setSavingPerms(true);
+    const next = { ...permsMap, [selectedUser]: draft };
+    await supabase.from("settings").upsert(
+      { key: "employee_permissions", value: JSON.stringify(next), updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+    setPermsMap(next);
+    setSavingPerms(false);
+    setSavedFlash(true);
+  }
+
+  const draftDirty = selectedUser
+    ? JSON.stringify([...draft].sort()) !== JSON.stringify([...permsFor(selectedUser)].sort())
+    : false;
 
   async function addEmployee() {
     if (!newName || !newUsername || !newPassword) return alert("Please fill in all fields");
@@ -79,9 +128,11 @@ export default function EmployeesPage() {
   const mobileStyles = `
     .emp-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
     .emp-add-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .perm-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
     @media (max-width: 768px) {
       .emp-grid-3 { grid-template-columns: 1fr 1fr; }
       .emp-add-grid { grid-template-columns: 1fr; }
+      .perm-grid { grid-template-columns: 1fr 1fr; }
     }
   `;
 
@@ -126,7 +177,10 @@ export default function EmployeesPage() {
             <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Manage team access and review submitted hours</p>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => setView(view === "hours" ? "employees" : "hours")} style={{ fontSize: 13, background: "#1e1e1e", border: "1px solid #333", color: "#aaa", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}>
+            <button onClick={() => setView(view === "access" ? "employees" : "access")} style={{ fontSize: 13, background: view === "access" ? "#1a0f00" : "#1e1e1e", border: `1px solid ${view === "access" ? "#fb923c55" : "#333"}`, color: view === "access" ? "#fb923c" : "#aaa", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}>
+              🔐 Access
+            </button>
+            <button onClick={() => setView(view === "hours" ? "employees" : "hours")} style={{ fontSize: 13, background: view === "hours" ? "#1a0f00" : "#1e1e1e", border: `1px solid ${view === "hours" ? "#fb923c55" : "#333"}`, color: view === "hours" ? "#fb923c" : "#aaa", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}>
               {view === "hours" ? "👤 Employees" : `⏱️ Hours ${pendingHours.length > 0 ? `(${pendingHours.length} pending)` : ""}`}
             </button>
             <button onClick={() => setView("add")} style={s.submitBtn}>+ Add employee</button>
@@ -185,7 +239,7 @@ export default function EmployeesPage() {
               </div>
             </div>
           </>
-        ) : (
+        ) : view === "hours" ? (
           <>
             {/* Pending hours */}
             <div style={s.section}>
@@ -240,6 +294,92 @@ export default function EmployeesPage() {
                 </div>
               )}
             </div>
+          </>
+        ) : (
+          <>
+            {/* ── Access / permissions editor ── */}
+            <div style={s.section}>
+              <div style={s.sectionTitle}>Page access</div>
+              <p style={{ fontSize: 12, color: "#777", marginTop: -6, marginBottom: 14, lineHeight: 1.5 }}>
+                Pick a person, then choose which pages they can open. Changes take effect the next time they log in.
+                This controls what they see and where they can go, but is not hard security — treat it as tidying the workspace, not locking a vault.
+              </p>
+
+              {employees.filter(e => e.role === "employee").length === 0 ? (
+                <p style={{ color: "#555", fontSize: 13 }}>No employees yet. Add someone first.</p>
+              ) : (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                  {employees.filter(e => e.role === "employee").map(emp => {
+                    const active = selectedUser === emp.username;
+                    const count = permsFor(emp.username).length;
+                    return (
+                      <button key={emp.id} onClick={() => selectUser(emp.username)} style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, cursor: "pointer",
+                        background: active ? "#1a0f00" : "#0f0f0f",
+                        border: `1px solid ${active ? "#fb923c" : "#222"}`,
+                        color: active ? "#fb923c" : "#aaa", fontSize: 13, fontWeight: 600,
+                        opacity: emp.active ? 1 : 0.5,
+                      }}>
+                        <span style={{ width: 24, height: 24, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#38bdf8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}>{emp.name[0]}</span>
+                        {emp.name}
+                        <span style={{ fontSize: 11, color: active ? "#fb923c99" : "#555", fontWeight: 500 }}>{count} page{count === 1 ? "" : "s"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {selectedUser && (
+              <div style={s.section}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                  <div style={s.sectionTitle}>
+                    Pages for @{selectedUser} · <span style={{ color: "#fb923c" }}>{draft.length} selected</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button onClick={() => setDraft(DEFAULT_EMPLOYEE_KEYS)} style={{ fontSize: 12, background: "none", border: "1px solid #222", color: "#666", borderRadius: 6, padding: "6px 12px", cursor: "pointer" }}>
+                      Reset to default
+                    </button>
+                    {savedFlash && !draftDirty && <span style={{ fontSize: 12, color: "#4ade80" }}>✓ Saved</span>}
+                    <button onClick={savePerms} disabled={savingPerms || !draftDirty} style={{ ...s.submitBtn, padding: "9px 18px", fontSize: 13, opacity: (savingPerms || !draftDirty) ? 0.45 : 1, cursor: (savingPerms || !draftDirty) ? "default" : "pointer" }}>
+                      {savingPerms ? "Saving…" : "Save access"}
+                    </button>
+                  </div>
+                </div>
+
+                {["main", "admin", "website"].map(group => {
+                  const pages = PAGES.filter(p => p.group === group);
+                  if (pages.length === 0) return null;
+                  return (
+                    <div key={group} style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>
+                        {GROUP_LABELS[group]}
+                        {group !== "main" && <span style={{ color: "#7c3aed", marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>admin-level pages</span>}
+                      </div>
+                      <div className="perm-grid">
+                        {pages.map(p => {
+                          const on = draft.includes(p.key);
+                          return (
+                            <button key={p.key} onClick={() => toggleKey(p.key)} style={{
+                              display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left" as const,
+                              background: on ? "#0d1a0d" : "#0f0f0f",
+                              border: `1px solid ${on ? "#4ade8055" : "#222"}`,
+                            }}>
+                              <span style={{
+                                width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+                                background: on ? "#4ade80" : "transparent", border: `1px solid ${on ? "#4ade80" : "#333"}`, color: "#0a0a0a", fontWeight: 700,
+                              }}>{on ? "✓" : ""}</span>
+                              <span style={{ fontSize: 16 }}>{p.emoji}</span>
+                              <span style={{ fontSize: 13, color: on ? "#e5e5e5" : "#888", fontWeight: 500 }}>{p.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
       </div>

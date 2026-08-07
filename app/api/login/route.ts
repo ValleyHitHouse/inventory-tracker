@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { ALL_KEYS, DEFAULT_EMPLOYEE_KEYS } from "@/lib/pages";
 export const dynamic = "force-dynamic";
 
 const FALLBACK_USERS: Record<string, { password: string; role: string; name: string }> = {
@@ -51,10 +52,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
   }
 
+  // Resolve which pages this login is allowed to see.
+  // Admins get everything. Employees get their configured set from
+  // settings.employee_permissions ({ username: [pageKeys] }), or the
+  // default operational set if no override has been saved for them.
+  let perms: string[];
+  if (user.role === "admin") {
+    perms = ALL_KEYS;
+  } else {
+    perms = DEFAULT_EMPLOYEE_KEYS;
+    try {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SECRET_KEY!
+      );
+      const { data: setting } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "employee_permissions")
+        .single();
+      if (setting?.value) {
+        const map = typeof setting.value === "string" ? JSON.parse(setting.value) : setting.value;
+        const forUser = map?.[normalizedUsername];
+        if (Array.isArray(forUser)) perms = forUser;
+      }
+    } catch (err) {
+      console.error("Failed to load employee permissions, using defaults:", err);
+    }
+  }
+
   const res = NextResponse.json({ ok: true, role: user.role, name: user.name });
   res.cookies.set("vhh-auth", "authenticated", { httpOnly: true, maxAge: 60 * 60 * 24 * 7, path: "/" });
   res.cookies.set("vhh-role", user.role, { httpOnly: false, maxAge: 60 * 60 * 24 * 7, path: "/" });
   res.cookies.set("vhh-user", user.name, { httpOnly: false, maxAge: 60 * 60 * 24 * 7, path: "/" });
+  res.cookies.set("vhh-perms", JSON.stringify(perms), { httpOnly: false, maxAge: 60 * 60 * 24 * 7, path: "/" });
   return res;
 }
 
@@ -63,5 +94,6 @@ export async function DELETE() {
   res.cookies.delete("vhh-auth");
   res.cookies.delete("vhh-role");
   res.cookies.delete("vhh-user");
+  res.cookies.delete("vhh-perms");
   return res;
 }

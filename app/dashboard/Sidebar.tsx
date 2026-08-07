@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { PAGES, ALL_KEYS, DEFAULT_EMPLOYEE_KEYS } from "@/lib/pages";
 
 function NavLink({ href, emoji, label, soon, onClick }: {
   href: string; emoji: string; label: string; soon?: boolean; onClick?: () => void
@@ -25,13 +26,9 @@ function NavLink({ href, emoji, label, soon, onClick }: {
   );
 }
 
-function WebsiteManagementNav() {
+function WebsiteManagementNav({ pages }: { pages: typeof PAGES }) {
   const pathname = usePathname();
-  const isActive =
-    pathname.startsWith("/dashboard/public-breaks") ||
-    pathname.startsWith("/dashboard/top-hits") ||
-    pathname.startsWith("/dashboard/1of1") ||
-    pathname.startsWith("/dashboard/slides");
+  const isActive = pages.some(p => pathname.startsWith(p.route));
   const [open, setOpen] = useState(isActive);
 
   useEffect(() => {
@@ -66,10 +63,9 @@ function WebsiteManagementNav() {
       </button>
       {open && (
         <div style={{ paddingLeft: 16, marginTop: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-          <NavLink href="/dashboard/public-breaks" emoji="📅" label="Break Schedule" />
-          <NavLink href="/dashboard/top-hits" emoji="🔥" label="Top Hits" />
-          <NavLink href="/dashboard/1of1" emoji="✨" label="1/1 Tracker" />
-          <NavLink href="/dashboard/slides" emoji="🎠" label="Hero Slides" />
+          {pages.map(p => (
+            <NavLink key={p.key} href={p.route} emoji={p.emoji} label={p.label} />
+          ))}
         </div>
       )}
     </div>
@@ -80,6 +76,7 @@ export default function DashboardSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [role, setRole] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
+  const [perms, setPerms] = useState<string[] | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -93,6 +90,18 @@ export default function DashboardSidebar() {
     }, {} as Record<string, string>);
     setRole(cookies["vhh-role"] || "");
     setUserName(cookies["vhh-user"] || "");
+    const raw = cookies["vhh-perms"];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(raw));
+        if (Array.isArray(parsed)) setPerms(parsed);
+        else setPerms(DEFAULT_EMPLOYEE_KEYS);
+      } catch {
+        setPerms(DEFAULT_EMPLOYEE_KEYS);
+      }
+    } else {
+      setPerms(DEFAULT_EMPLOYEE_KEYS);
+    }
   }, []);
 
   useEffect(() => {
@@ -107,36 +116,34 @@ export default function DashboardSidebar() {
   }
 
   const isAdmin = role === "admin";
+  const allowed = new Set(isAdmin ? ALL_KEYS : (perms || DEFAULT_EMPLOYEE_KEYS));
+
+  const mainPages = PAGES.filter(p => p.group === "main" && allowed.has(p.key));
+  const adminPages = PAGES.filter(p => p.group === "admin" && allowed.has(p.key));
+  const websitePages = PAGES.filter(p => p.group === "website" && allowed.has(p.key));
 
   const navLinks = (
     <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 4, overflowY: "auto" }}>
-      <NavLink href="/dashboard/home" emoji="🏠" label="Home" />
-      <NavLink href="/dashboard/inventory" emoji="📦" label="Inventory" />
-      <NavLink href="/dashboard/breaks" emoji="🎴" label="Breaks" />
-      <NavLink href="/dashboard/customers" emoji="👥" label="Customers" />
-      <NavLink href="/dashboard/cards" emoji="🃏" label="Card Database" />
-      <NavLink href="/dashboard/card-inventory" emoji="📋" label="Card Inventory" />
-      <NavLink href="/dashboard/lot-comp" emoji="🏷️" label="Lot Comps" />
-      <NavLink href="/dashboard/hours" emoji="📦" label="Break Shipments" />
-      {isAdmin && (
+      {mainPages.map(p => (
+        <NavLink key={p.key} href={p.route} emoji={p.emoji} label={p.label} />
+      ))}
 
-
-
-
+      {adminPages.length > 0 && (
         <>
           <div style={{ height: 1, background: "#1e1e1e", margin: "8px 12px" }} />
-          <div style={{ fontSize: 10, color: "#333", textTransform: "uppercase", letterSpacing: ".6px", padding: "4px 12px" }}>Admin only</div>
-          <NavLink href="/dashboard/analytics" emoji="📊" label="Analytics" />
-          <NavLink href="/dashboard/cash" emoji="💵" label="Cash Position" />
-          <NavLink href="/dashboard/recap" emoji="🗓️" label="Weekly Recap" />
-          <NavLink href="/dashboard/box-roi" emoji="🏆" label="Box ROI" />
-          <NavLink href="/dashboard/payroll" emoji="💼" label="Payroll" />
-          <NavLink href="/dashboard/financials" emoji="🧾" label="Financials" />
-          <NavLink href="/dashboard/giveaways" emoji="🎁" label="Giveaways" />
-          <NavLink href="/dashboard/employees" emoji="👤" label="Employees" />
-          <NavLink href="/dashboard/settings" emoji="⚙️" label="Settings" />
+          <div style={{ fontSize: 10, color: "#333", textTransform: "uppercase", letterSpacing: ".6px", padding: "4px 12px" }}>
+            {isAdmin ? "Admin only" : "More"}
+          </div>
+          {adminPages.map(p => (
+            <NavLink key={p.key} href={p.route} emoji={p.emoji} label={p.label} />
+          ))}
+        </>
+      )}
+
+      {websitePages.length > 0 && (
+        <>
           <div style={{ height: 1, background: "#1e1e1e", margin: "8px 12px" }} />
-          <WebsiteManagementNav />
+          <WebsiteManagementNav pages={websitePages} />
         </>
       )}
     </nav>
