@@ -5,15 +5,23 @@ import { CARD_SETS as SETS } from "@/lib/cardSets";
 import { supabase } from "@/lib/supabase";
 import { fetchAll } from "@/lib/db";
 
-const SUBSETS = ["Chasers", "Insurance", "First Timers"];
+// Carded categories: each stored on the cardinventory row (in the `subset` column)
+// with full card attributes. "Giveaway Card" is NOT here — it's a plain tally kept
+// in the giveawaytotal counter (shared with lot-comp and breaks).
+const CATEGORIES = ["In a DECK", "Juiced Givvy", "Personal Collection", "NUKES"];
+const GIVEAWAY = "Giveaway Card";
+
+const catColors: Record<string, string> = {
+  "In a DECK": "#38bdf8",
+  "Juiced Givvy": "#4ade80",
+  "Personal Collection": "#a78bfa",
+  "NUKES": "#f87171",
+  "Giveaway Card": "#fbbf24",
+};
 
 const weaponColors: Record<string, string> = {
   Fire: "#fb923c", Ice: "#38bdf8", Steel: "#94a3b8",
   Gum: "#f472b6", Hex: "#a78bfa", Glow: "#4ade80", Brawl: "#f87171"
-};
-
-const subsetToInventoryId: Record<string, number> = {
-  "Chasers": 4, "Insurance": 3, "First Timers": 2,
 };
 
 export default function CardInventoryPage() {
@@ -27,13 +35,25 @@ export default function CardInventoryPage() {
   const [editQty, setEditQty] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [inventorySearch, setInventorySearch] = useState("");
 
+  // Filters
+  const [fltCategory, setFltCategory] = useState("All");
+  const [fltHero, setFltHero] = useState("");
+  const [fltWeapon, setFltWeapon] = useState("");
+  const [fltInsert, setFltInsert] = useState("");
+  const [fltPower, setFltPower] = useState("");
+  const [fltSet, setFltSet] = useState("");
+
+  // Giveaway counter quick-adjust
+  const [givEdit, setGivEdit] = useState("");
+  const [givSaving, setGivSaving] = useState(false);
+
+  // Add flow
   const [selectedSet, setSelectedSet] = useState(0);
   const [allCards, setAllCards] = useState<any[]>([]);
   const [cardSearch, setCardSearch] = useState("");
-  const [activeSubset, setActiveSubset] = useState("Chasers");
-  const [picked, setPicked] = useState<Record<string, { card: any; qty: number; subset: string; pricePaid: string }>>({});
+  const [activeCat, setActiveCat] = useState(CATEGORIES[0]);
+  const [picked, setPicked] = useState<Record<string, { card: any; qty: number; category: string; pricePaid: string }>>({});
   const [giveawayCount, setGiveawayCount] = useState(0);
   const [giveawayPriceEach, setGiveawayPriceEach] = useState("");
   const [addSaving, setAddSaving] = useState(false);
@@ -58,11 +78,6 @@ export default function CardInventoryPage() {
   async function deleteCard(item: any) {
     setDeletingId(item.id);
     await supabase.from("cardinventory").delete().eq("id", item.id);
-    const invId = subsetToInventoryId[item.subset];
-    if (invId) {
-      const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
-      if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity - item.quantity) }).eq("id", invId);
-    }
     setDeletingId(null); setConfirmId(null);
     loadInventory();
   }
@@ -71,14 +86,23 @@ export default function CardInventoryPage() {
     if (!editingCard) return;
     setSaving(true);
     const newQty = parseInt(editQty) || 0;
-    const diff = newQty - editingCard.quantity;
     await supabase.from("cardinventory").update({ quantity: newQty, price_paid: parseFloat(editPrice || "0") }).eq("id", editingCard.id);
-    const invId = subsetToInventoryId[editingCard.subset];
-    if (invId && diff !== 0) {
-      const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
-      if (inv) await supabase.from("Inventory").update({ quantity: Math.max(0, inv.quantity + diff) }).eq("id", invId);
-    }
     setSaving(false); setEditingCard(null);
+    loadInventory();
+  }
+
+  // Set the Giveaway Card tally to an exact number (keeps giveawaytotal + Inventory id 1 in step)
+  async function saveGiveawayTotal() {
+    const next = Math.max(0, parseInt(givEdit));
+    if (isNaN(next)) return;
+    setGivSaving(true);
+    const diff = next - giveawayTotal;
+    await supabase.from("giveawaytotal").update({ total: next }).eq("id", 1);
+    if (diff !== 0) {
+      const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
+      if (giv) await supabase.from("Inventory").update({ quantity: Math.max(0, giv.quantity + diff) }).eq("id", 1);
+    }
+    setGivSaving(false); setGivEdit("");
     loadInventory();
   }
 
@@ -89,10 +113,10 @@ export default function CardInventoryPage() {
   }).slice(0, 50);
 
   function pickCard(card: any) {
-    const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
+    const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeCat}`;
     setPicked(prev => ({
       ...prev,
-      [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, subset: activeSubset, pricePaid: "" }
+      [key]: prev[key] ? { ...prev[key], qty: prev[key].qty + 1 } : { card, qty: 1, category: activeCat, pricePaid: "" }
     }));
   }
 
@@ -116,36 +140,40 @@ export default function CardInventoryPage() {
       const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
       if (giv) await supabase.from("Inventory").update({ quantity: giv.quantity + giveawayCount }).eq("id", 1);
     }
-    const rows = Object.values(picked).map(({ card, qty, subset, pricePaid }) => ({
-      subset, card_number: card["Card #"], hero: card.Hero,
+    const rows = Object.values(picked).map(({ card, qty, category, pricePaid }) => ({
+      subset: category, card_number: card["Card #"], hero: card.Hero,
       athlete: card["Athlete Inspiration"], variation: card.Treatment,
-      weapon: card.Weapon, set_name: SETS[selectedSet].label,
+      weapon: card.Weapon, power: card.Power, set_name: SETS[selectedSet].label,
       quantity: qty, price_paid: parseFloat(pricePaid || "0"),
     }));
     if (rows.length > 0) await supabase.from("cardinventory").insert(rows);
-    for (const subset of SUBSETS) {
-      const total = Object.values(picked).filter(p => p.subset === subset).reduce((s, p) => s + p.qty, 0);
-      if (total > 0) {
-        const invId = subsetToInventoryId[subset];
-        const { data: inv } = await supabase.from("Inventory").select("id,quantity").eq("id", invId).single();
-        if (inv) await supabase.from("Inventory").update({ quantity: inv.quantity + total }).eq("id", invId);
-      }
-    }
     await loadInventory();
     setAddSaving(false); setView("inventory");
     setPicked({}); setCardSearch(""); setGiveawayCount(0); setGiveawayPriceEach("");
   }
 
-  const groupedInventory = SUBSETS.reduce((acc, sub) => {
-    acc[sub] = inventory.filter(i => {
-      if (i.subset !== sub || i.quantity <= 0) return false;
-      if (!inventorySearch) return true;
-      const q = inventorySearch.toLowerCase().trim();
-      const combined = [i.card_number, i.hero, i.athlete, i.variation, i.weapon, i.set_name].join(" ").toLowerCase();
-      return q.split(" ").filter(Boolean).every((word: string) => combined.includes(word));
-    });
-    return acc;
-  }, {} as Record<string, any[]>);
+  // ── Carded inventory + filter options ──
+  const carded = inventory.filter(i => i.quantity > 0 && CATEGORIES.includes(i.subset));
+  const uniq = (arr: any[]) => [...new Set(arr.filter(v => v !== null && v !== undefined && String(v).trim() !== ""))].map(String).sort();
+  const weaponOpts = uniq(carded.map(i => i.weapon));
+  const insertOpts = uniq(carded.map(i => i.variation));
+  const powerOpts = uniq(carded.map(i => i.power));
+  const setOpts = uniq(carded.map(i => i.set_name));
+
+  const filtered = carded.filter(i => {
+    if (fltCategory !== "All" && fltCategory !== GIVEAWAY && i.subset !== fltCategory) return false;
+    if (fltHero && !(i.hero || "").toLowerCase().includes(fltHero.toLowerCase().trim())) return false;
+    if (fltWeapon && String(i.weapon) !== fltWeapon) return false;
+    if (fltInsert && String(i.variation) !== fltInsert) return false;
+    if (fltPower && String(i.power) !== fltPower) return false;
+    if (fltSet && String(i.set_name) !== fltSet) return false;
+    return true;
+  });
+
+  const filtersActive = !!(fltHero || fltWeapon || fltInsert || fltPower || fltSet);
+  function clearFilters() { setFltHero(""); setFltWeapon(""); setFltInsert(""); setFltPower(""); setFltSet(""); }
+
+  const catCount = (cat: string) => inventory.filter(i => i.subset === cat && i.quantity > 0).reduce((s, i) => s + i.quantity, 0);
 
   const s = {
     shell: { background: "#0a0a0a", minHeight: "100vh", color: "#e5e5e5", width: "100%", boxSizing: "border-box" as const },
@@ -153,20 +181,23 @@ export default function CardInventoryPage() {
     section: { background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase" as const, letterSpacing: ".6px", marginBottom: 14 },
     input: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 12px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box" as const },
+    select: { width: "100%", background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "9px 10px", fontSize: 13, color: "#e5e5e5", outline: "none", boxSizing: "border-box" as const, cursor: "pointer" },
     smallInput: { background: "#0f0f0f", border: "1px solid #222", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "#e5e5e5", outline: "none", width: 70 as const },
     submitBtn: { background: "linear-gradient(135deg,#7c3aed,#db2877)", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" },
   };
 
   const mobileStyles = `
-    .ci-stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; width: 100%; }
+    .ci-stats-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 16px; width: 100%; }
+    .ci-filter-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; gap: 8px; }
     .ci-edit-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
     .ci-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .ci-giveaway-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 768px) {
-      .ci-stats-grid { grid-template-columns: repeat(4,1fr); gap: 6px; }
+      .ci-stats-grid { grid-template-columns: repeat(3,1fr); gap: 6px; }
       .ci-stats-grid > div { padding: 10px 8px !important; }
-      .ci-stats-grid .stat-number { font-size: 20px !important; }
+      .ci-stats-grid .stat-number { font-size: 18px !important; }
       .ci-stats-grid .stat-label { font-size: 9px !important; }
+      .ci-filter-grid { grid-template-columns: 1fr 1fr; }
       .ci-edit-grid { grid-template-columns: 1fr 1fr; }
       .ci-edit-fields { grid-template-columns: 1fr 1fr; }
       .ci-giveaway-grid { grid-template-columns: 1fr; }
@@ -197,8 +228,8 @@ export default function CardInventoryPage() {
               <div style={{ fontSize: 14, color: "#e5e5e5", fontWeight: 600 }}>{editingCard.hero}</div>
             </div>
             <div style={{ background: "#0f0f0f", borderRadius: 8, padding: 14 }}>
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>Subset</div>
-              <div style={{ fontSize: 14, color: "#a78bfa" }}>{editingCard.subset}</div>
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>Category</div>
+              <div style={{ fontSize: 14, color: catColors[editingCard.subset] || "#a78bfa" }}>{editingCard.subset}</div>
             </div>
           </div>
           <div className="ci-edit-fields">
@@ -233,7 +264,7 @@ export default function CardInventoryPage() {
         </div>
 
         <div style={s.section}>
-          <div style={s.sectionTitle}>🎁 Giveaway cards</div>
+          <div style={s.sectionTitle}>🎁 Giveaway Card (small inserts — no card details)</div>
           <div className="ci-giveaway-grid">
             <div>
               <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Number of giveaway cards</label>
@@ -253,9 +284,10 @@ export default function CardInventoryPage() {
               <button key={i} onClick={() => setSelectedSet(i)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${selectedSet === i ? "#fb923c" : "#222"}`, background: selectedSet === i ? "#fb923c22" : "#0f0f0f", color: selectedSet === i ? "#fb923c" : "#555" }}>{set.label}</button>
             ))}
           </div>
+          <div style={{ fontSize: 11, color: "#555", marginBottom: 6 }}>Category for these cards</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {SUBSETS.map(sub => (
-              <button key={sub} onClick={() => setActiveSubset(sub)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${activeSubset === sub ? "#a78bfa" : "#222"}`, background: activeSubset === sub ? "#a78bfa22" : "#0f0f0f", color: activeSubset === sub ? "#a78bfa" : "#555" }}>{sub}</button>
+            {CATEGORIES.map(cat => (
+              <button key={cat} onClick={() => setActiveCat(cat)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${activeCat === cat ? catColors[cat] : "#222"}`, background: activeCat === cat ? catColors[cat] + "22" : "#0f0f0f", color: activeCat === cat ? catColors[cat] : "#555" }}>{cat}</button>
             ))}
           </div>
           <input style={{ ...s.input, marginBottom: 12 }} placeholder="🔍 Search by hero, athlete, card #..." value={cardSearch} onChange={e => setCardSearch(e.target.value)} />
@@ -263,7 +295,7 @@ export default function CardInventoryPage() {
             {filteredCards.length === 0 ? (
               <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 13 }}>Type to search cards</div>
             ) : filteredCards.map((card: any, i: number) => {
-              const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeSubset}`;
+              const key = `${card["Card #"]}-${card.Weapon}-${card.Treatment}-${activeCat}`;
               const isPicked = !!picked[key];
               return (
                 <div key={i} onClick={() => pickCard(card)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #161616", cursor: "pointer", background: isPicked ? "#a78bfa11" : "transparent" }}>
@@ -272,6 +304,7 @@ export default function CardInventoryPage() {
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
                     <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                     {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
+                    {card.Power && <span style={{ fontSize: 11, color: "#777" }}>⚡{card.Power}</span>}
                   </div>
                   <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8, flexShrink: 0 }}>{isPicked ? `✓ ${picked[key].qty}` : "+ Add"}</span>
                 </div>
@@ -283,10 +316,10 @@ export default function CardInventoryPage() {
         {Object.keys(picked).length > 0 && (
           <div style={s.section}>
             <div style={s.sectionTitle}>Cards to add — enter price paid</div>
-            {Object.entries(picked).map(([key, { card, qty, subset, pricePaid }]) => (
+            {Object.entries(picked).map(([key, { card, qty, category, pricePaid }]) => (
               <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #161616", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>{subset}</span>
+                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: (catColors[category] || "#a78bfa") + "22", color: catColors[category] || "#a78bfa" }}>{category}</span>
                   <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.Hero}</span>
                   <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                   {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
@@ -325,66 +358,127 @@ export default function CardInventoryPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Card Inventory</h1>
-            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Cards received from lot comps + manual additions</p>
+            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Filter by category and card attributes</p>
           </div>
           <button onClick={() => setView("add")} style={s.submitBtn}>+ Add cards</button>
         </div>
 
-        {/* Stats — always 4 columns, smaller on mobile */}
+        {/* Category stat tiles */}
         <div className="ci-stats-grid">
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px 20px" }}>
-            <div className="stat-label" style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>🎁 Giveaway</div>
-            <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: "#4ade80" }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
-          </div>
-          {SUBSETS.map(sub => (
-            <div key={sub} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px 20px" }}>
-              <div className="stat-label" style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>{sub}</div>
-              <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: "#a78bfa" }}>
-                {loading ? "—" : inventory.filter(i => i.subset === sub && i.quantity > 0).reduce((sum, i) => sum + i.quantity, 0)}
-              </div>
+          {CATEGORIES.map(cat => (
+            <div key={cat} onClick={() => setFltCategory(fltCategory === cat ? "All" : cat)}
+              style={{ background: fltCategory === cat ? catColors[cat] + "14" : "#111", border: `1px solid ${fltCategory === cat ? catColors[cat] + "66" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 18px", cursor: "pointer" }}>
+              <div className="stat-label" style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>{cat}</div>
+              <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: catColors[cat] }}>{loading ? "—" : catCount(cat)}</div>
             </div>
           ))}
+          <div onClick={() => setFltCategory(fltCategory === GIVEAWAY ? "All" : GIVEAWAY)}
+            style={{ background: fltCategory === GIVEAWAY ? catColors[GIVEAWAY] + "14" : "#111", border: `1px solid ${fltCategory === GIVEAWAY ? catColors[GIVEAWAY] + "66" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 18px", cursor: "pointer" }}>
+            <div className="stat-label" style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>{GIVEAWAY}</div>
+            <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: catColors[GIVEAWAY] }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
+          </div>
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <input
-            style={s.input}
-            placeholder="🔍 Search by hero, athlete, card #, treatment, weapon, set..."
-            value={inventorySearch}
-            onChange={e => setInventorySearch(e.target.value)}
-          />
+        {/* Category tabs */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {["All", ...CATEGORIES, GIVEAWAY].map(cat => {
+            const active = fltCategory === cat;
+            const color = cat === "All" ? "#e5e5e5" : catColors[cat];
+            return (
+              <button key={cat} onClick={() => setFltCategory(cat)} style={{
+                padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${active ? color : "#222"}`,
+                background: active ? color + "22" : "#0f0f0f",
+                color: active ? color : "#666",
+              }}>{cat}</button>
+            );
+          })}
         </div>
 
-        {loading ? <p style={{ color: "#555" }}>Loading...</p> : SUBSETS.map(sub => (
-          <div key={sub} style={{ marginBottom: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{sub}</h2>
-              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#a78bfa22", color: "#a78bfa" }}>
-                {groupedInventory[sub]?.reduce((s, i) => s + i.quantity, 0) || 0} cards
-              </span>
+        {loading ? (
+          <p style={{ color: "#555" }}>Loading...</p>
+        ) : fltCategory === GIVEAWAY ? (
+          /* Giveaway Card — plain tally, no attributes */
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Giveaway Card total</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 44, fontWeight: 800, color: catColors[GIVEAWAY] }}>{giveawayTotal.toLocaleString()}</div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Set total to</label>
+                  <input style={{ ...s.input, width: 140 }} type="number" min={0} placeholder={String(giveawayTotal)} value={givEdit} onChange={e => setGivEdit(e.target.value)} />
+                </div>
+                <button onClick={saveGiveawayTotal} disabled={givSaving || givEdit === ""} style={{ ...s.submitBtn, padding: "10px 18px", fontSize: 13, opacity: (givSaving || givEdit === "") ? 0.45 : 1 }}>
+                  {givSaving ? "Saving…" : "Update"}
+                </button>
+              </div>
             </div>
-            {!groupedInventory[sub] || groupedInventory[sub].length === 0 ? (
+            <p style={{ fontSize: 12, color: "#555", marginTop: 14, marginBottom: 0 }}>
+              Small inserts, tracked as a single count with no hero/weapon/set. Adding cards through “+ Add cards” or lot comps increases this; breaks that give cards away decrease it.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Filter bar */}
+            <div style={{ ...s.section, marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={s.sectionTitle as any}>Filters</div>
+                {filtersActive && <button onClick={clearFilters} style={{ fontSize: 12, background: "none", border: "1px solid #222", color: "#888", borderRadius: 6, padding: "4px 12px", cursor: "pointer" }}>Clear</button>}
+              </div>
+              <div className="ci-filter-grid">
+                <input style={s.input} placeholder="🔍 Hero name" value={fltHero} onChange={e => setFltHero(e.target.value)} />
+                <select style={s.select} value={fltWeapon} onChange={e => setFltWeapon(e.target.value)}>
+                  <option value="">All weapons</option>
+                  {weaponOpts.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
+                <select style={s.select} value={fltInsert} onChange={e => setFltInsert(e.target.value)}>
+                  <option value="">All insert types</option>
+                  {insertOpts.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <select style={s.select} value={fltPower} onChange={e => setFltPower(e.target.value)}>
+                  <option value="">All powers</option>
+                  {powerOpts.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select style={s.select} value={fltSet} onChange={e => setFltSet(e.target.value)}>
+                  <option value="">All sets</option>
+                  {setOpts.map(st => <option key={st} value={st}>{st}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Result count */}
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 10 }}>
+              {filtered.length} card{filtered.length === 1 ? "" : "s"}
+              {" · "}{filtered.reduce((s2, i) => s2 + i.quantity, 0)} in stock
+            </div>
+
+            {/* Flat card list */}
+            {filtered.length === 0 ? (
               <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 24, textAlign: "center" }}>
-                <p style={{ color: "#555", fontSize: 13 }}>{inventorySearch ? `No ${sub} match your search` : `No ${sub} in inventory`}</p>
+                <p style={{ color: "#555", fontSize: 13 }}>{carded.length === 0 ? "No cards in inventory yet" : "No cards match your filters"}</p>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {groupedInventory[sub].map((item: any, i: number) => (
-                  <div key={i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 14px", width: "100%", boxSizing: "border-box" }}>
+                {filtered.map((item: any, i: number) => (
+                  <div key={item.id ?? i} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 14px", width: "100%", boxSizing: "border-box" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                       <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>{item.hero}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>{item.hero}</span>
+                          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: (catColors[item.subset] || "#a78bfa") + "22", color: catColors[item.subset] || "#a78bfa", fontWeight: 600 }}>{item.subset}</span>
+                        </div>
                         <div style={{ fontSize: 12, color: "#a78bfa", marginTop: 2 }}>{item.athlete}</div>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: "#a78bfa" }}>{item.quantity}</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: catColors[item.subset] || "#a78bfa" }}>{item.quantity}</div>
                         <div style={{ fontSize: 10, color: "#555" }}>in stock</div>
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
                       <span style={{ fontSize: 11, color: "#555", fontFamily: "monospace" }}>{item.card_number}</span>
                       {item.weapon && <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: (weaponColors[item.weapon] || "#333") + "22", color: weaponColors[item.weapon] || "#aaa" }}>{item.weapon}</span>}
                       {item.variation && <span style={{ fontSize: 11, color: "#777" }}>{item.variation}</span>}
+                      {(item.power !== null && item.power !== undefined && String(item.power).trim() !== "") && <span style={{ fontSize: 11, color: "#888" }}>⚡{item.power}</span>}
                       {item.set_name && <span style={{ fontSize: 11, color: "#555" }}>{item.set_name}</span>}
                       {item.price_paid > 0 && <span style={{ fontSize: 11, color: "#fb923c" }}>${parseFloat(item.price_paid).toFixed(2)} paid</span>}
                     </div>
@@ -408,8 +502,8 @@ export default function CardInventoryPage() {
                 ))}
               </div>
             )}
-          </div>
-        ))}
+          </>
+        )}
       </div>
     </div>
   );
