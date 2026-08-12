@@ -304,6 +304,7 @@ export default function CardInventoryPage() {
                     <span style={{ color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{card.Hero}</span>
                     <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                     {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
+                    {card.Treatment && <span style={{ fontSize: 11, color: "#c084fc" }}>{card.Treatment}</span>}
                     {card.Power && <span style={{ fontSize: 11, color: "#777" }}>⚡{card.Power}</span>}
                   </div>
                   <span style={{ fontSize: 11, color: isPicked ? "#a78bfa" : "#333", whiteSpace: "nowrap", marginLeft: 8, flexShrink: 0 }}>{isPicked ? `✓ ${picked[key].qty}` : "+ Add"}</span>
@@ -323,6 +324,8 @@ export default function CardInventoryPage() {
                   <span style={{ color: "#e5e5e5", fontSize: 13, fontWeight: 600 }}>{card.Hero}</span>
                   <span style={{ color: "#a78bfa", fontSize: 12 }}>{card["Athlete Inspiration"]}</span>
                   {card.Weapon && <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 11, background: (weaponColors[card.Weapon] || "#333") + "22", color: weaponColors[card.Weapon] || "#aaa" }}>{card.Weapon}</span>}
+                  {card.Treatment && <span style={{ fontSize: 11, color: "#c084fc" }}>{card.Treatment}</span>}
+                  {card.Power && <span style={{ fontSize: 11, color: "#777" }}>⚡{card.Power}</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
