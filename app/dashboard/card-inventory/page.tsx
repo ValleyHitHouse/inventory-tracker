@@ -10,6 +10,10 @@ import { fetchAll } from "@/lib/db";
 // in the giveawaytotal counter (shared with lot-comp and breaks).
 const CATEGORIES = ["In a DECK", "Juiced Givvy", "Personal Collection", "NUKES"];
 const GIVEAWAY = "Giveaway Card";
+// Insurance: plain tally like Giveaway Card (no card attributes), fixed $3/card valuation.
+// Stored in settings under key `insurance_total`.
+const INSURANCE = "Insurance";
+const INSURANCE_VALUE = 3;
 
 const catColors: Record<string, string> = {
   "In a DECK": "#38bdf8",
@@ -17,6 +21,7 @@ const catColors: Record<string, string> = {
   "Personal Collection": "#a78bfa",
   "NUKES": "#f87171",
   "Giveaway Card": "#fbbf24",
+  "Insurance": "#2dd4bf",
 };
 
 const weaponColors: Record<string, string> = {
@@ -48,6 +53,11 @@ export default function CardInventoryPage() {
   const [givEdit, setGivEdit] = useState("");
   const [givSaving, setGivSaving] = useState(false);
 
+  // Insurance tally (settings-backed) quick-adjust
+  const [insuranceTotal, setInsuranceTotal] = useState(0);
+  const [insEdit, setInsEdit] = useState("");
+  const [insSaving, setInsSaving] = useState(false);
+
   // Add flow
   const [selectedSet, setSelectedSet] = useState(0);
   const [allCards, setAllCards] = useState<any[]>([]);
@@ -56,6 +66,7 @@ export default function CardInventoryPage() {
   const [picked, setPicked] = useState<Record<string, { card: any; qty: number; category: string; pricePaid: string }>>({});
   const [giveawayCount, setGiveawayCount] = useState(0);
   const [giveawayPriceEach, setGiveawayPriceEach] = useState("");
+  const [insuranceCount, setInsuranceCount] = useState(0);
   const [addSaving, setAddSaving] = useState(false);
 
   useEffect(() => { loadInventory(); }, []);
@@ -70,6 +81,8 @@ export default function CardInventoryPage() {
     setLoading(true);
     const { data: gt } = await supabase.from("giveawaytotal").select("total").single();
     if (gt) setGiveawayTotal(gt.total);
+    const { data: insSetting } = await supabase.from("settings").select("value").eq("key", "insurance_total").single();
+    setInsuranceTotal(insSetting?.value ? (parseInt(String(insSetting.value)) || 0) : 0);
     const inv = await fetchAll(() => supabase.from("cardinventory").select("*").order("subset").order("created_at", { ascending: false }));
     setInventory(inv);
     setLoading(false);
@@ -106,6 +119,19 @@ export default function CardInventoryPage() {
     loadInventory();
   }
 
+  // Set the Insurance tally to an exact number (settings-backed)
+  async function saveInsuranceTotal() {
+    const next = Math.max(0, parseInt(insEdit));
+    if (isNaN(next)) return;
+    setInsSaving(true);
+    await supabase.from("settings").upsert(
+      { key: "insurance_total", value: String(next), updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+    setInsSaving(false); setInsEdit("");
+    loadInventory();
+  }
+
   const filteredCards = allCards.filter(c => {
     const q = cardSearch.toLowerCase().trim();
     const combined = [c["Card #"], c.Hero, c["Athlete Inspiration"], c.Treatment, c.Weapon, c.Power, c.Variation].join(" ").toLowerCase();
@@ -133,12 +159,18 @@ export default function CardInventoryPage() {
   }
 
   async function saveCards() {
-    if (Object.keys(picked).length === 0 && giveawayCount === 0) return alert("Please add at least one card!");
+    if (Object.keys(picked).length === 0 && giveawayCount === 0 && insuranceCount === 0) return alert("Please add at least one card!");
     setAddSaving(true);
     if (giveawayCount > 0) {
       await supabase.from("giveawaytotal").update({ total: giveawayTotal + giveawayCount }).eq("id", 1);
       const { data: giv } = await supabase.from("Inventory").select("id,quantity").eq("id", 1).single();
       if (giv) await supabase.from("Inventory").update({ quantity: giv.quantity + giveawayCount }).eq("id", 1);
+    }
+    if (insuranceCount > 0) {
+      await supabase.from("settings").upsert(
+        { key: "insurance_total", value: String(insuranceTotal + insuranceCount), updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
     }
     const rows = Object.values(picked).map(({ card, qty, category, pricePaid }) => ({
       subset: category, card_number: card["Card #"], hero: card.Hero,
@@ -149,7 +181,7 @@ export default function CardInventoryPage() {
     if (rows.length > 0) await supabase.from("cardinventory").insert(rows);
     await loadInventory();
     setAddSaving(false); setView("inventory");
-    setPicked({}); setCardSearch(""); setGiveawayCount(0); setGiveawayPriceEach("");
+    setPicked({}); setCardSearch(""); setGiveawayCount(0); setGiveawayPriceEach(""); setInsuranceCount(0);
   }
 
   // ── Carded inventory + filter options ──
@@ -187,7 +219,7 @@ export default function CardInventoryPage() {
   };
 
   const mobileStyles = `
-    .ci-stats-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 16px; width: 100%; }
+    .ci-stats-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 10px; margin-bottom: 16px; width: 100%; }
     .ci-filter-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; gap: 8px; }
     .ci-edit-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
     .ci-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -273,6 +305,22 @@ export default function CardInventoryPage() {
             <div>
               <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Price paid per card ($)</label>
               <input style={s.input} type="number" min={0} step="0.01" placeholder="e.g. 1.50" value={giveawayPriceEach} onChange={e => setGiveawayPriceEach(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        <div style={s.section}>
+          <div style={s.sectionTitle}>🛡️ Insurance (small inserts — no card details · ${INSURANCE_VALUE.toFixed(2)} each)</div>
+          <div className="ci-giveaway-grid">
+            <div>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Number of insurance cards</label>
+              <input style={s.input} type="number" min={0} value={insuranceCount} onChange={e => setInsuranceCount(Number(e.target.value))} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Valuation (fixed)</label>
+              <div style={{ ...s.input, display: "flex", alignItems: "center", color: "#4ade80", fontWeight: 600 }}>
+                ${(insuranceCount * INSURANCE_VALUE).toLocaleString()} <span style={{ color: "#555", fontWeight: 400, marginLeft: 6 }}>({insuranceCount} × ${INSURANCE_VALUE})</span>
+              </div>
             </div>
           </div>
         </div>
@@ -380,11 +428,16 @@ export default function CardInventoryPage() {
             <div className="stat-label" style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>{GIVEAWAY}</div>
             <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: catColors[GIVEAWAY] }}>{loading ? "—" : giveawayTotal.toLocaleString()}</div>
           </div>
+          <div onClick={() => setFltCategory(fltCategory === INSURANCE ? "All" : INSURANCE)}
+            style={{ background: fltCategory === INSURANCE ? catColors[INSURANCE] + "14" : "#111", border: `1px solid ${fltCategory === INSURANCE ? catColors[INSURANCE] + "66" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 18px", cursor: "pointer" }}>
+            <div className="stat-label" style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>{INSURANCE}</div>
+            <div className="stat-number" style={{ fontSize: 26, fontWeight: 800, color: catColors[INSURANCE] }}>{loading ? "—" : insuranceTotal.toLocaleString()}</div>
+          </div>
         </div>
 
         {/* Category tabs */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          {["All", ...CATEGORIES, GIVEAWAY].map(cat => {
+          {["All", ...CATEGORIES, GIVEAWAY, INSURANCE].map(cat => {
             const active = fltCategory === cat;
             const color = cat === "All" ? "#e5e5e5" : catColors[cat];
             return (
@@ -418,6 +471,31 @@ export default function CardInventoryPage() {
             </div>
             <p style={{ fontSize: 12, color: "#555", marginTop: 14, marginBottom: 0 }}>
               Small inserts, tracked as a single count with no hero/weapon/set. Adding cards through “+ Add cards” or lot comps increases this; breaks that give cards away decrease it.
+            </p>
+          </div>
+        ) : fltCategory === INSURANCE ? (
+          /* Insurance — plain tally, no attributes, fixed $3/card valuation */
+          <div style={s.section}>
+            <div style={s.sectionTitle}>Insurance total</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 44, fontWeight: 800, color: catColors[INSURANCE] }}>{insuranceTotal.toLocaleString()}</div>
+              <div>
+                <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: ".4px" }}>Valuation</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#4ade80" }}>${(insuranceTotal * INSURANCE_VALUE).toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "#555" }}>${INSURANCE_VALUE.toFixed(2)} / card</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: "#666", marginBottom: 5, display: "block" }}>Set total to</label>
+                  <input style={{ ...s.input, width: 140 }} type="number" min={0} placeholder={String(insuranceTotal)} value={insEdit} onChange={e => setInsEdit(e.target.value)} />
+                </div>
+                <button onClick={saveInsuranceTotal} disabled={insSaving || insEdit === ""} style={{ ...s.submitBtn, padding: "10px 18px", fontSize: 13, opacity: (insSaving || insEdit === "") ? 0.45 : 1 }}>
+                  {insSaving ? "Saving…" : "Update"}
+                </button>
+              </div>
+            </div>
+            <p style={{ fontSize: 12, color: "#555", marginTop: 14, marginBottom: 0 }}>
+              Tracked as a single count with no hero/weapon/set, valued at ${INSURANCE_VALUE.toFixed(2)} each. Add through “+ Add cards.”
             </p>
           </div>
         ) : (
