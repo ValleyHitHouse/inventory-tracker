@@ -30,6 +30,29 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard/login", request.url));
   }
 
+  // ---- Owner-only: the agent fleet ----------------------------------
+  // These routes surface payroll, financials and the Thinker's critique.
+  // They must NOT fall through to the generic "unknown route" pass, which
+  // would let any logged-in employee reach them.
+  const OWNER_ONLY = ["/dashboard/agents", "/api/agents"];
+  if (OWNER_ONLY.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    const ownerUser = request.cookies.get("vhh-user")?.value?.toLowerCase();
+    const owners = (process.env.AGENT_OWNER_USERS ?? "mitch")
+      .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const isOwner =
+      roleCookie === "admin" && !!ownerUser && owners.includes(ownerUser);
+
+    if (!isOwner) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      }
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    const ownerRes = NextResponse.next();
+    ownerRes.headers.set("Cache-Control", "private, no-store");
+    return ownerRes;
+  }
+
   // Admin can access everything
   if (roleCookie === "admin") {
     return NextResponse.next();

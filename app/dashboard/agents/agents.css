@@ -1,0 +1,163 @@
+/* =====================================================================
+   Agents page — MOBILE FIRST.
+   Base styles target a ~360px phone. Media queries only ever ADD.
+   No layout shift: cards have intrinsic sizes, images have width/height.
+   ===================================================================== */
+
+.ag {
+  --void:#070B12; --panel:#0F1724; --panel2:#14202F;
+  --line:#1F2C3D; --line2:#2E3F55;
+  --amber:#FFB13D; --cyan:#46D8E0; --red:#E8674C; --green:#5FBF6A;
+  --bone:#E6EDF6; --mute:#8497AC; --dim:#57697D;
+
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px 14px 72px;
+  color: var(--mute);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---------- header ---------- */
+.ag-eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber)}
+.ag-title{font-size:26px;line-height:1.15;color:var(--bone);margin:6px 0 14px;font-weight:700;letter-spacing:-.01em}
+
+.ag-stats{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:8px;
+  margin-bottom:22px;
+}
+.ag-stats > div{
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+}
+.ag-stats b{display:block;font-size:20px;color:var(--bone);font-weight:700;line-height:1.2}
+.ag-stats span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+
+/* ---------- brief ---------- */
+.ag-brief{
+  background:linear-gradient(180deg,var(--panel2),var(--panel));
+  border:1px solid var(--line2);border-left:3px solid var(--amber);
+  border-radius:8px;padding:14px;margin-bottom:22px;
+}
+.ag-lbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+.ag-brief-head{color:var(--bone);font-size:16px;line-height:1.45;margin:0 0 10px;font-weight:600}
+.ag-brief details summary{
+  font-size:12px;color:var(--cyan);cursor:pointer;list-style:none;
+  padding:6px 0;min-height:32px;display:flex;align-items:center;
+}
+.ag-brief details summary::-webkit-details-marker{display:none}
+.ag-brief details summary::before{content:'▸ ';margin-right:4px}
+.ag-brief details[open] summary::before{content:'▾ '}
+.ag-md{
+  white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12.5px;line-height:1.7;color:var(--mute);margin-top:8px;
+  background:var(--void);border:1px solid var(--line);border-radius:6px;padding:12px;
+  overflow-x:auto;
+}
+
+/* ---------- sections ---------- */
+.ag-section{margin-bottom:26px}
+.ag-h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:12px;font-weight:600}
+
+/* ---------- needs-you flags ---------- */
+.ag-flags{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ag-flag{
+  background:var(--panel);border:1px solid var(--line);
+  border-left:3px solid var(--amber);border-radius:8px;padding:13px 14px;
+}
+.ag-flag.sev-urgent{border-left-color:var(--red)}
+.ag-flag.sev-action{border-left-color:var(--amber)}
+.ag-flag.sev-notice{border-left-color:var(--cyan)}
+.ag-flag-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ag-flag-who{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.ag-flag-sev{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.ag-flag h3{font-size:15px;color:var(--bone);margin:0 0 4px;font-weight:600;line-height:1.35}
+.ag-flag p{margin:0;font-size:13.5px;line-height:1.5}
+.ag-flag a{display:inline-block;margin-top:8px;font-size:12.5px;color:var(--cyan);text-decoration:none;min-height:32px;line-height:32px}
+
+/* ---------- tabs (44px touch targets) ---------- */
+.ag-tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.ag-tabs button{
+  flex:1;background:none;border:0;border-bottom:2px solid transparent;
+  color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.04em;
+  padding:12px 8px;min-height:44px;cursor:pointer;font-family:inherit;
+}
+.ag-tabs button.on{color:var(--bone);border-bottom-color:var(--amber)}
+.ag-tabs button:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+
+/* ---------- fleet cards ---------- */
+.ag-grid{display:grid;grid-template-columns:1fr;gap:10px}
+
+.ag-card{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 14px;
+  content-visibility:auto;contain-intrinsic-size:auto 180px;
+}
+.ag-card.st-dark,.ag-card.st-off{opacity:.62}
+.ag-card-top{display:flex;align-items:center;gap:11px;margin-bottom:9px}
+.ag-face{
+  width:44px;height:44px;flex:none;border-radius:50%;overflow:hidden;
+  background:var(--void);border:1px solid var(--line2);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--dim);font-weight:700;
+}
+.ag-face img{width:100%;height:100%;object-fit:cover;display:block}
+.ag-id{flex:1;min-width:0}
+.ag-id h3{font-size:16px;color:var(--bone);margin:0;font-weight:700;line-height:1.2}
+.ag-id span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+
+.ag-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--dim)}
+.ag-dot.st-working{background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:agpulse 2s infinite}
+.ag-dot.st-idle{background:var(--green)}
+.ag-dot.st-dark,.ag-dot.st-off{background:#33445A}
+@keyframes agpulse{50%{opacity:.35}}
+
+.ag-sum{font-size:13.5px;color:var(--bone);line-height:1.5;margin:0 0 10px}
+.ag-meta{
+  display:flex;flex-wrap:wrap;gap:10px;font-size:10.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--dim);
+  border-top:1px solid var(--line);padding-top:9px;
+}
+.ag-subs{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.ag-sub{
+  font-size:11px;color:var(--mute);background:var(--void);
+  border:1px solid var(--line);border-radius:4px;padding:4px 8px;
+}
+.ag-sub.st-working{border-color:var(--cyan);color:var(--bone)}
+.ag-badge{
+  margin-top:10px;display:inline-block;font-size:11px;font-weight:600;
+  color:#1B1206;background:var(--amber);border-radius:4px;padding:4px 9px;
+}
+
+/* ---------- activity log ---------- */
+.ag-log{list-style:none;margin:0;padding:0}
+.ag-log li{
+  display:grid;grid-template-columns:52px 1fr;gap:4px 10px;
+  padding:11px 0;border-bottom:1px solid var(--line);
+}
+.ag-log-t{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.ag-log-w{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.ag-log-b{grid-column:1/-1;font-size:13.5px;line-height:1.5;color:var(--mute)}
+.ag-empty{color:var(--dim);font-size:13px;padding:16px 0}
+
+/* =====================================================================
+   Wider screens ADD columns. Nothing above is overridden.
+   ===================================================================== */
+@media (min-width:540px){
+  .ag-stats{grid-template-columns:repeat(4,1fr)}
+  .ag-log li{grid-template-columns:60px 110px 1fr}
+  .ag-log-b{grid-column:3}
+}
+@media (min-width:760px){
+  .ag{padding:26px 22px 80px}
+  .ag-title{font-size:32px}
+  .ag-grid{grid-template-columns:repeat(2,1fr)}
+  .ag-flags{display:grid;grid-template-columns:repeat(2,1fr)}
+}
+@media (min-width:1040px){
+  .ag-grid{grid-template-columns:repeat(3,1fr)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .ag *{animation:none!important;transition:none!important}
+}
