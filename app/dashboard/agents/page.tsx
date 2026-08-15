@@ -4,6 +4,7 @@ import {
   getRecentFindings, getSpend24h,
 } from '@/lib/agentsDb';
 import FleetClient from './FleetClient';
+import BriefCard from './BriefCard';
 import './agents.css';
 
 // Owner-only + payroll data: never cache this across requests. A shared
@@ -38,35 +39,12 @@ export default async function AgentsPage() {
         </div>
       </header>
 
-      {brief && (
-        <section className="ag-brief">
-          <div className="ag-lbl">Morning brief · {brief.for_date}</div>
-          <p className="ag-brief-head">{brief.headline}</p>
-          <details>
-            <summary>Read the full brief</summary>
-            <pre className="ag-md">{brief.body_md}</pre>
-          </details>
-        </section>
-      )}
-
-      {open.length > 0 && (
-        <section className="ag-section">
-          <h2 className="ag-h2">Needs you</h2>
-          <ul className="ag-flags">
-            {open.map(f => (
-              <li key={f.id} className={`ag-flag sev-${f.severity}`}>
-                <div className="ag-flag-top">
-                  <span className="ag-flag-who">{f.agent_key}</span>
-                  <span className="ag-flag-sev">{f.severity}</span>
-                </div>
-                <h3>{f.title}</h3>
-                <p>{f.body}</p>
-                {f.link && <a href={f.link}>Open →</a>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <BriefCard
+        headline={brief?.headline ?? null}
+        date={brief?.for_date ?? new Date().toISOString().slice(0, 10)}
+        needs={open.slice(0, 4)}
+        handledCount={Math.max(0, recent.length - Math.min(open.length, 4))}
+      />
 
       <FleetClient initialFleet={fleet} recent={recent} />
     </main>
