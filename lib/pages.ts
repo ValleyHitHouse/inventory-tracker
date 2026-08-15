@@ -24,6 +24,7 @@ export const PAGES: PageDef[] = [
   { key: "top-hits", route: "/dashboard/top-hits", label: "Top Hits", emoji: "🔥", group: "website" },
   { key: "1of1", route: "/dashboard/1of1", label: "1/1 Tracker", emoji: "✨", group: "website" },
   { key: "slides", route: "/dashboard/slides", label: "Hero Slides", emoji: "🎠", group: "website" },
+  { key: "agents", route: "/dashboard/agents", label: "Agent Fleet", emoji: "🌵", group: "admin" },
 ];
 
 export const ALL_KEYS = PAGES.map(p => p.key);
