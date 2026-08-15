@@ -47,6 +47,8 @@ export type FleetAgent = {
 export type Finding = {
   id: number; agent_key: string; severity: string; title: string; body: string;
   needs_you: boolean; acknowledged: boolean; link: string | null; created_at: string;
+  /** Structured numbers the agent recorded, e.g. {"gap_usd": 580}. */
+  metrics: Record<string, unknown> | null;
 };
 
 export type Brief = {
@@ -110,7 +112,7 @@ export async function getTodayBrief(): Promise<Brief | null> {
 export async function getOpenFindings(limit = 8): Promise<Finding[]> {
   const { data } = await db()
     .from('agent_findings')
-    .select('id, agent_key, severity, title, body, needs_you, acknowledged, link, created_at')
+    .select('id, agent_key, severity, title, body, needs_you, acknowledged, link, created_at, metrics')
     .eq('needs_you', true)
     .eq('acknowledged', false)
     .order('created_at', { ascending: false })
@@ -121,7 +123,7 @@ export async function getOpenFindings(limit = 8): Promise<Finding[]> {
 export async function getRecentFindings(limit = 20): Promise<Finding[]> {
   const { data } = await db()
     .from('agent_findings')
-    .select('id, agent_key, severity, title, body, needs_you, acknowledged, link, created_at')
+    .select('id, agent_key, severity, title, body, needs_you, acknowledged, link, created_at, metrics')
     .order('created_at', { ascending: false })
     .limit(limit);
   return (data ?? []) as unknown as Finding[];

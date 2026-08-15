@@ -176,7 +176,7 @@
 .ag-tldr-item{border-top:1px solid var(--line)}
 .ag-tldr-item:last-child{border-bottom:1px solid var(--line)}
 .ag-tldr-btn{
-  width:100%;display:grid;grid-template-columns:26px 1fr auto 16px;
+  width:100%;display:grid;grid-template-columns:26px 1fr auto auto 16px;
   gap:10px;align-items:center;text-align:left;
   background:none;border:0;color:inherit;font-family:inherit;
   padding:14px 2px;min-height:52px;cursor:pointer;
@@ -189,6 +189,16 @@
 .sev-urgent .ag-tldr-n{background:var(--red);color:#fff}
 .sev-action .ag-tldr-n{background:var(--amber);color:#1B1206}
 .ag-tldr-title{font-size:14.5px;color:var(--bone);font-weight:600;line-height:1.35}
+/* The number that makes the row worth reading. Tabular figures so the
+   four rows line up rather than jitter. */
+.ag-tldr-fig{
+  font-size:13px;font-weight:700;letter-spacing:.01em;white-space:nowrap;
+  font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;
+  color:var(--bone);background:var(--line);
+  border:1px solid var(--line2);border-radius:5px;padding:3px 8px;
+}
+.sev-urgent .ag-tldr-fig{color:var(--red)}
+.sev-action .ag-tldr-fig{color:var(--amber)}
 .ag-tldr-who{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);white-space:nowrap}
 .ag-tldr-chev{color:var(--dim);font-size:12px}
 .ag-tldr-body{padding:0 2px 16px 38px}
@@ -200,6 +210,8 @@
   font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
 }
 @media(max-width:420px){
+  /* Agent name goes; the figure stays — it's the reason to read the row. */
   .ag-tldr-who{display:none}
-  .ag-tldr-btn{grid-template-columns:26px 1fr 16px}
+  .ag-tldr-btn{grid-template-columns:26px 1fr auto 16px;gap:8px}
+  .ag-tldr-fig{font-size:12.5px;padding:3px 6px}
 }

@@ -1,0 +1,131 @@
+/* =====================================================================
+   Ship view. Inherits the --void/--cyan/--amber palette from .ag.
+
+   The deck is one baked image. Everything that reacts to agent state is
+   an SVG overlay in the same 1440x2016 space, so room glow lands exactly
+   on the floor the bake drew. All motion is CSS — no canvas, no rAF.
+   ===================================================================== */
+
+.sv { margin-bottom: 26px; }
+
+/* ---------- hud ---------- */
+.sv-hud { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.sv-hud-name { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--amber); font-weight: 700; }
+.sv-hud-stat {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 100px; padding: 3px 9px;
+}
+.sv-hud-stat.on { color: var(--cyan); border-color: var(--line2); }
+.sv-hud-stat.alert { color: var(--red); border-color: var(--red); }
+
+/* ---------- stage ---------- */
+.sv-stage-wrap {
+  background: radial-gradient(120% 70% at 50% 40%, #0B1420 0%, var(--void) 72%);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+}
+.sv-stage { position: relative; width: 100%; }
+.sv-deck {
+  display: block; width: 100%; height: auto;
+  image-rendering: pixelated;
+  filter: brightness(.86) saturate(.95);
+}
+.sv-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+
+/* ---------- rooms ---------- */
+.sv-room {
+  fill: transparent; stroke: transparent; stroke-width: 3;
+  transition: fill .3s ease, stroke .3s ease;
+}
+.sv-room[role='button'] { cursor: pointer; }
+.sv-room[role='button']:hover { fill: rgba(230, 237, 246, .07); }
+.sv-room:focus-visible { outline: none; stroke: var(--amber); stroke-width: 5; }
+
+.sv-room.st-working {
+  fill: rgba(70, 216, 224, .20); stroke: rgba(70, 216, 224, .55);
+  animation: sv-breathe 3.2s ease-in-out infinite;
+}
+@keyframes sv-breathe {
+  0%, 100% { fill: rgba(70, 216, 224, .14); }
+  50%      { fill: rgba(70, 216, 224, .28); }
+}
+.sv-room.st-idle { fill: rgba(70, 216, 224, .07); stroke: rgba(46, 63, 85, .9); }
+.sv-room.st-crew { fill: rgba(95, 191, 106, .07); stroke: rgba(46, 63, 85, .9); }
+.sv-room.st-dark { fill: rgba(255, 177, 61, .14); stroke: rgba(255, 177, 61, .5); }
+.sv-room.st-off  { fill: rgba(3, 6, 11, .66); stroke: rgba(46, 63, 85, .6); }
+
+.sv-room.flagged { stroke: rgba(232, 103, 76, .85); animation: sv-alarm 1.9s ease-in-out infinite; }
+@keyframes sv-alarm {
+  0%, 100% { fill: rgba(232, 103, 76, .10); }
+  50%      { fill: rgba(232, 103, 76, .30); }
+}
+.sv-room.sel { stroke: var(--amber); stroke-width: 5; }
+
+/* ---------- doors ---------- */
+.sv-leaf { fill: #96A8BC; stroke: #080D14; stroke-width: 3; transition: transform .45s cubic-bezier(.4,0,.2,1); }
+.sv-seam { fill: var(--cyan); opacity: .9; transition: opacity .3s ease; }
+.sv-door.open .sv-leaf.l { transform: translateX(-17px); }
+.sv-door.open .sv-leaf.r { transform: translateX(17px); }
+.sv-door.open .sv-seam { opacity: 0; }
+
+/* ---------- name plates ---------- */
+.sv-tag {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  pointer-events: none; text-align: center;
+  text-shadow: 0 1px 3px #000, 0 0 10px #000, 0 0 4px #000;
+}
+.sv-tag b { font-size: 11px; font-weight: 700; color: var(--bone); letter-spacing: .04em; line-height: 1.1; }
+.sv-tag i {
+  font-style: normal; font-size: 8.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--cyan); line-height: 1.1;
+}
+.sv-tag.st-off b, .sv-tag.st-off i { opacity: .45; }
+.sv-tag.st-dark i { color: var(--amber); }
+.sv-tag.st-crew i { color: var(--green); }
+
+/* ---------- detail ---------- */
+.sv-hint { margin: 12px 0 0; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.sv-detail {
+  margin-top: 12px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--line2); border-radius: 8px;
+}
+.sv-detail.st-working { border-left-color: var(--cyan); }
+.sv-detail.st-dark    { border-left-color: var(--amber); }
+.sv-detail.st-off     { border-left-color: var(--dim); }
+.sv-detail-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.sv-detail-head b { font-size: 15px; color: var(--bone); }
+.sv-detail-head span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); }
+.sv-detail-head em {
+  font-style: normal; margin-left: auto;
+  font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
+}
+.sv-detail p { margin: 7px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--mute); }
+.sv-detail-meta {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim);
+}
+.sv-detail-meta span { border: 1px solid var(--line); border-radius: 4px; padding: 3px 7px; }
+.sv-detail-meta .hot { color: var(--red); border-color: var(--red); }
+
+/* ---------- docked ---------- */
+.sv-docked { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+.sv-docked-lbl { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.sv-chip {
+  font-size: 11px; color: var(--mute); font-family: inherit; cursor: pointer;
+  background: none; border: 1px solid var(--line); border-radius: 100px; padding: 4px 11px;
+}
+.sv-chip.st-working { color: var(--cyan); border-color: var(--line2); }
+.sv-chip.st-off { opacity: .5; }
+.sv-chip:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* ---------- motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .sv-room { animation: none !important; }
+  .sv-leaf { transition: none; }
+}
+
+@media (min-width: 700px) {
+  .sv-tag b { font-size: 13px; }
+  .sv-tag i { font-size: 9.5px; }
+}

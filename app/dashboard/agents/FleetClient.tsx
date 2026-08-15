@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import type { FleetAgent, Finding } from '@/lib/agentsDb';
+import ShipView from './ShipView';
 
 const AVATAR: Record<string, string> = {
   glow: '/agents/glow.webp',
@@ -25,7 +26,7 @@ export default function FleetClient({
   initialFleet, recent,
 }: { initialFleet: FleetAgent[]; recent: Finding[] }) {
   const [fleet, setFleet] = useState(initialFleet);
-  const [tab, setTab] = useState<'fleet' | 'log'>('fleet');
+  const [tab, setTab] = useState<'ship' | 'fleet' | 'log'>('ship');
 
   // Light poll. Only refreshes when the tab is visible, so a phone left
   // open in a pocket isn't burning battery or Supabase quota.
@@ -54,13 +55,17 @@ export default function FleetClient({
   return (
     <>
       <div className="ag-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'ship'}
+          className={tab === 'ship' ? 'on' : ''} onClick={() => setTab('ship')}>Ship</button>
         <button role="tab" aria-selected={tab === 'fleet'}
           className={tab === 'fleet' ? 'on' : ''} onClick={() => setTab('fleet')}>Fleet</button>
         <button role="tab" aria-selected={tab === 'log'}
           className={tab === 'log' ? 'on' : ''} onClick={() => setTab('log')}>Activity</button>
       </div>
 
-      {tab === 'fleet' ? (
+      {tab === 'ship' ? (
+        <ShipView fleet={fleet} />
+      ) : tab === 'fleet' ? (
         <section className="ag-section">
           <div className="ag-grid">
             {leads.map(a => (

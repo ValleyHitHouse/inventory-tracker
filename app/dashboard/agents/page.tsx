@@ -6,6 +6,7 @@ import {
 import FleetClient from './FleetClient';
 import BriefCard from './BriefCard';
 import './agents.css';
+import './ship.css';
 
 // Owner-only + payroll data: never cache this across requests. A shared
 // CDN copy is exactly how one user's private page leaks to another.
