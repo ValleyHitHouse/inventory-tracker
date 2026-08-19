@@ -1,41 +1,88 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import { fetchAll } from "@/lib/db";
 
+import {
+  periodKey as ppKey, periodStart, periodLabel, periodState, periodCopy,
+  type PeriodState,
+} from "@/lib/payPeriods";
+
 const SHIPPER_TABS = ["Caitlin", "Abbi"];
 
-function getPayPeriod(dateStr: string): string {
-  const date = new Date(dateStr + "T12:00:00");
-  const day = date.getDay(); // 0=Sun, 6=Sat
-  // Find the most recent Saturday (start of period)
-  const daysFromSat = (day + 1) % 7; // days since last Saturday
-  const periodStart = new Date(date);
-  periodStart.setDate(date.getDate() - daysFromSat);
-  const periodEnd = new Date(periodStart);
-  periodEnd.setDate(periodStart.getDate() + 6); // Friday
-  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `${fmt(periodStart)} – ${fmt(periodEnd)}, ${periodEnd.getFullYear()}`;
-}
+const TONE: Record<string, string> = {
+  good: "#4ade80",
+  pending: "#38bdf8",
+  warn: "#f87171",
+  neutral: "#a78bfa",
+};
 
+const eq = (a: any, b: any) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+
+/** Period key for a raw date string — delegates to the shared helper. */
 function getPeriodKey(dateStr: string): string {
-  const date = new Date(dateStr + "T12:00:00");
-  const day = date.getDay();
-  const daysFromSat = (day + 1) % 7;
-  const periodStart = new Date(date);
-  periodStart.setDate(date.getDate() - daysFromSat);
-  return periodStart.toISOString().split("T")[0];
+  return ppKey(dateStr);
 }
 
+/** Group rows into Sat–Fri pay periods, newest first. */
 function groupByPeriod(items: any[], dateField: string) {
-  const groups: Record<string, { key: string; label: string; items: any[] }> = {};
+  const groups: Record<string, { key: string; start: Date; label: string; items: any[] }> = {};
   for (const item of items) {
-    const key = getPeriodKey(item[dateField]);
-    const label = getPayPeriod(item[dateField]);
-    if (!groups[key]) groups[key] = { key, label, items: [] };
+    const raw = item[dateField];
+    if (!raw) continue;
+    const start = periodStart(raw);
+    const key = ppKey(start);
+    if (!groups[key]) groups[key] = { key, start, label: periodLabel(start), items: [] };
     groups[key].items.push(item);
   }
   return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
+}
+
+/** The headline an employee actually opens this page for: what lands Friday. */
+function NextPayment({ periods }: { periods: { start: Date; state: PeriodState; due: number }[] }) {
+  const next = periods.find(p => p.state === "due");
+  const open = periods.find(p => p.state === "open");
+  const overdueTotal = periods.filter(p => p.state === "overdue").reduce((s, p) => s + p.due, 0);
+  return (
+    <div style={{ background: next ? "#08131a" : "#111", border: `1px solid ${next ? "#38bdf844" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 18px", marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 6 }}>Your next payment</div>
+      {next ? (
+        <>
+          <div style={{ fontSize: 30, fontWeight: 800, color: "#38bdf8", lineHeight: 1.1 }}>${next.due.toFixed(2)}</div>
+          <div style={{ fontSize: 13, color: "#7fa8bd", marginTop: 6 }}>{periodCopy(next.start, "due").headline}</div>
+          <div style={{ fontSize: 11, color: "#555", marginTop: 3 }}>for the week of {periodLabel(next.start)}</div>
+        </>
+      ) : (
+        <div style={{ fontSize: 15, fontWeight: 700, color: overdueTotal > 0 ? "#fb923c" : "#4ade80" }}>
+          {overdueTotal > 0 ? "Nothing scheduled for this Friday" : "You're all caught up ✓"}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 18, marginTop: 12, flexWrap: "wrap" }}>
+        <div>
+          <span style={{ fontSize: 11, color: "#555" }}>This week so far </span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>${(open?.due ?? 0).toFixed(2)}</span>
+        </div>
+        {overdueTotal > 0 && (
+          <div>
+            <span style={{ fontSize: 11, color: "#555" }}>Older, still unpaid </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171" }}>${overdueTotal.toFixed(2)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Shared period header — the same three states everywhere pay is shown. */
+function PeriodHeading({ start, state, paidAt, detail }: { start: Date; state: PeriodState; paidAt?: string | null; detail?: ReactNode }) {
+  const copy = periodCopy(start, state, { paidAt });
+  return (
+    <div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: TONE[copy.tone] }}>{copy.headline}</div>
+      <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>{copy.sub}</div>
+      {detail && <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{detail}</div>}
+    </div>
+  );
 }
 
 export default function PayrollPage() {
@@ -48,6 +95,7 @@ export default function PayrollPage() {
   const [markingPeriod, setMarkingPeriod] = useState<string | null>(null);
   const [userRole, setUserRole] = useState("");
   const [userName, setUserName] = useState("");
+  const [autoSectioned, setAutoSectioned] = useState(false);
 
   useEffect(() => {
     const cookies = document.cookie.split(";").reduce((acc, c) => {
@@ -126,38 +174,66 @@ export default function PayrollPage() {
   }
 
   const isAdmin = userRole === "admin";
-  const isShipper = SHIPPER_TABS.includes(userName);
+
+  // Who is this person in the data? Derived from the rows themselves rather
+  // than a hardcoded name list, so a new breaker or shipper works with no
+  // code change. Employees only ever see their own numbers.
+  const myBreaks = breaks.filter(b => eq(b.breaker, userName));
+  const myShipments = shipments.filter(s => eq(s.shipper_name, userName));
+  const isBreakerUser = !isAdmin && myBreaks.length > 0;
+  const isShipperUser = !isAdmin && (myShipments.length > 0 || SHIPPER_TABS.includes(userName));
+  const isBoth = isBreakerUser && isShipperUser;
+
+  // Land a non-admin on whichever section their pay actually lives in.
+  useEffect(() => {
+    if (loading || isAdmin || autoSectioned) return;
+    setSection(isShipperUser ? "shippers" : "breakers");
+    setAutoSectioned(true);
+  }, [loading, isAdmin, isBreakerUser, isShipperUser, autoSectioned]);
 
   // Breaker data
   const allBreakers = Array.from(new Set(breaks.map(b => b.breaker).filter(Boolean)));
   const breakerTabs = ["All Breakers", ...allBreakers];
-  const filteredBreaks = breakerTab === "All Breakers"
-    ? breaks : breaks.filter(b => b.breaker === breakerTab);
+  const activeBreakerName = isAdmin ? breakerTab : userName;
+  const filteredBreaks = isAdmin
+    ? (breakerTab === "All Breakers" ? breaks : breaks.filter(b => b.breaker === breakerTab))
+    : myBreaks;
 
   // Group breaker breaks by period and breaker
   function getBreakerPeriods(breakerName: string) {
-    const breakerBreaks = breakerName === "All Breakers"
-      ? breaks : breaks.filter(b => b.breaker === breakerName);
+    const breakerBreaks = !isAdmin ? myBreaks
+      : breakerName === "All Breakers" ? breaks
+      : breaks.filter(b => b.breaker === breakerName);
     const groups = groupByPeriod(breakerBreaks, "date");
     return groups.map(group => {
       const totalCommission = group.items.reduce((s, b) => s + parseFloat(b.commission_amount || "0"), 0);
       const allPaid = group.items.every(b => b.commission_paid);
       const somePaid = group.items.some(b => b.commission_paid);
       const breakersInPeriod = Array.from(new Set(group.items.map((b: any) => b.breaker)));
-      return { ...group, totalCommission, allPaid, somePaid, breakersInPeriod };
+      const stamps = group.items.map((b: any) => b.commission_paid_at).filter(Boolean).sort();
+      return {
+        ...group, totalCommission, allPaid, somePaid, breakersInPeriod,
+        state: periodState(group.start, allPaid) as PeriodState,
+        paidAt: stamps[stamps.length - 1] || null,
+      };
     });
   }
 
   // Shipper data
   const filteredShipments = isAdmin
     ? shipments.filter(s => s.shipper_name === shipperTab)
-    : shipments.filter(s => s.shipper_name === userName);
+    : myShipments;
 
   const shipperPeriods = groupByPeriod(filteredShipments, "ship_date").map(group => {
     const totalPay = group.items.reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
     const allPaid = group.items.every(sh => sh.paid);
     const unpaidTotal = group.items.filter(sh => !sh.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
-    return { ...group, totalPay, allPaid, unpaidTotal };
+    const stamps = group.items.map((sh: any) => sh.paid_at).filter(Boolean).sort();
+    return {
+      ...group, totalPay, allPaid, unpaidTotal,
+      state: periodState(group.start, allPaid) as PeriodState,
+      paidAt: stamps[stamps.length - 1] || null,
+    };
   });
 
   const totalShipperOutstanding = filteredShipments.filter(s => !s.paid).reduce((s, sh) => s + parseFloat(sh.pay_amount || "0"), 0);
@@ -186,12 +262,14 @@ export default function PayrollPage() {
       <div style={s.content}>
 
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Payroll</h1>
-          <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Weekly pay periods — Saturday to Friday · Payday every Friday</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{isAdmin ? "Payroll" : "Your pay"}</h1>
+          <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
+            Each week runs Saturday to Friday and is paid the Friday after it closes
+          </p>
         </div>
 
-        {/* Section toggle — only show if admin or show relevant section */}
-        {isAdmin && (
+        {/* Section toggle — admins pick; employees only see one unless they do both */}
+        {(isAdmin || isBoth) && (
           <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
             <button onClick={() => setSection("breakers")} style={{ padding: "10px 24px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", border: `1px solid ${section === "breakers" ? "#a78bfa" : "#222"}`, background: section === "breakers" ? "#a78bfa22" : "#111", color: section === "breakers" ? "#a78bfa" : "#555" }}>
               💼 Breakers
@@ -205,16 +283,31 @@ export default function PayrollPage() {
         {loading ? <p style={{ color: "#555" }}>Loading...</p> : <>
 
           {/* BREAKERS SECTION */}
-          {section === "breakers" && isAdmin && (
+          {section === "breakers" && (isAdmin || isBreakerUser) && (
             <>
-              {/* Breaker tabs */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-                {breakerTabs.map(tab => (
-                  <button key={tab} onClick={() => setBreakerTab(tab)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${breakerTab === tab ? "#a78bfa" : "#222"}`, background: breakerTab === tab ? "#a78bfa22" : "#111", color: breakerTab === tab ? "#a78bfa" : "#555" }}>
-                    {tab}
-                  </button>
-                ))}
-              </div>
+              {/* Breaker tabs — admin only; employees are pinned to themselves */}
+              {isAdmin ? (
+                <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                  {breakerTabs.map(tab => (
+                    <button key={tab} onClick={() => setBreakerTab(tab)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${breakerTab === tab ? "#a78bfa" : "#222"}`, background: breakerTab === tab ? "#a78bfa22" : "#111", color: breakerTab === tab ? "#a78bfa" : "#555" }}>
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#a78bfa" }}>🎙️ {userName}&apos;s breaking commission</div>
+                  <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>Broken out by week, newest first</div>
+                </div>
+              )}
+
+              {!isAdmin && (
+                <NextPayment periods={getBreakerPeriods(activeBreakerName).map((p: any) => ({
+                  start: p.start,
+                  state: p.state,
+                  due: p.items.filter((b: any) => !b.commission_paid).reduce((s: number, b: any) => s + parseFloat(b.commission_amount || "0"), 0),
+                }))} />
+              )}
 
               {/* Summary stats */}
               <div className="pay-stats">
@@ -247,22 +340,23 @@ export default function PayrollPage() {
                   <div key={period.key} style={{ ...s.section, borderColor: period.allPaid ? "#4ade8022" : unpaidTotal > 0 ? "#f8717122" : "#1e1e1e", opacity: period.allPaid ? 0.75 : 1 }}>
                     {/* Period header */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Pay period</div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#e5e5e5" }}>{period.label}</div>
-                        <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                      <PeriodHeading
+                        start={period.start}
+                        state={period.state}
+                        paidAt={period.paidAt}
+                        detail={<>
                           {period.items.length} break{period.items.length !== 1 ? "s" : ""}
-                          {breakerTab === "All Breakers" && period.breakersInPeriod.length > 0 && (
+                          {isAdmin && breakerTab === "All Breakers" && period.breakersInPeriod.length > 0 && (
                             <span style={{ color: "#a78bfa", marginLeft: 8 }}>{(period.breakersInPeriod as string[]).join(", ")}</span>
                           )}
-                        </div>
-                      </div>
+                        </>}
+                      />
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                           {unpaidTotal > 0 && (
                             <div style={{ textAlign: "right" }}>
-                              <div style={{ fontSize: 11, color: "#f87171" }}>UNPAID</div>
-                              <div style={{ fontSize: 20, fontWeight: 800, color: "#f87171" }}>${unpaidTotal.toFixed(2)}</div>
+                              <div style={{ fontSize: 11, color: TONE[periodCopy(period.start, period.state).tone] }}>{period.state === "open" ? "SO FAR" : "AMOUNT"}</div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: TONE[periodCopy(period.start, period.state).tone] }}>${unpaidTotal.toFixed(2)}</div>
                             </div>
                           )}
                           {paidTotal > 0 && (
@@ -272,7 +366,12 @@ export default function PayrollPage() {
                             </div>
                           )}
                         </div>
-                        {breakerTab !== "All Breakers" && (
+                        {!isAdmin && (
+                          <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: TONE[periodCopy(period.start, period.state).tone] + "22", color: TONE[periodCopy(period.start, period.state).tone], fontWeight: 600 }}>
+                            {periodCopy(period.start, period.state, { paidAt: period.paidAt }).badge}
+                          </span>
+                        )}
+                        {isAdmin && breakerTab !== "All Breakers" && (
                           period.allPaid ? (
                             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                               <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: "#4ade8022", color: "#4ade80", fontWeight: 600 }}>✓ Paid</span>
@@ -315,7 +414,7 @@ export default function PayrollPage() {
           )}
 
           {/* SHIPPERS SECTION */}
-          {section === "shippers" && (
+          {section === "shippers" && (isAdmin || isShipperUser) && (
             <>
               {/* Shipper tabs — admin only */}
               {isAdmin && (
@@ -331,9 +430,13 @@ export default function PayrollPage() {
               {/* Who we're viewing */}
               {!isAdmin && (
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#38bdf8" }}>📦 {userName}'s pay summary</div>
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>Payday is every Friday for the previous week (Sat–Fri)</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#38bdf8" }}>📦 {userName}&apos;s shipping pay</div>
+                  <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>Broken out by week, newest first</div>
                 </div>
+              )}
+
+              {!isAdmin && (
+                <NextPayment periods={shipperPeriods.map(p => ({ start: p.start, state: p.state, due: p.unpaidTotal }))} />
               )}
 
               {/* Summary stats */}
@@ -366,15 +469,18 @@ export default function PayrollPage() {
                   <div key={period.key} style={{ ...s.section, borderColor: period.allPaid ? "#4ade8022" : period.unpaidTotal > 0 ? "#f8717122" : "#1e1e1e", opacity: period.allPaid ? 0.75 : 1 }}>
                     {/* Period header */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".4px" }}>Pay period · Paid on Friday</div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#e5e5e5" }}>{period.label}</div>
-                        <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{period.items.length} shipment{period.items.length !== 1 ? "s" : ""}</div>
-                      </div>
+                      <PeriodHeading
+                        start={period.start}
+                        state={period.state}
+                        paidAt={period.paidAt}
+                        detail={<>{period.items.length} shipment{period.items.length !== 1 ? "s" : ""}</>}
+                      />
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 11, color: period.allPaid ? "#4ade80" : "#f87171" }}>{period.allPaid ? "PAID" : "TOTAL DUE"}</div>
-                          <div style={{ fontSize: 24, fontWeight: 800, color: period.allPaid ? "#4ade80" : "#f87171" }}>${period.totalPay.toFixed(2)}</div>
+                          <div style={{ fontSize: 11, color: TONE[periodCopy(period.start, period.state).tone] }}>
+                            {period.state === "paid" ? "PAID" : period.state === "open" ? "SO FAR" : "AMOUNT"}
+                          </div>
+                          <div style={{ fontSize: 24, fontWeight: 800, color: TONE[periodCopy(period.start, period.state).tone] }}>${period.totalPay.toFixed(2)}</div>
                         </div>
                         {isAdmin && (
                           period.allPaid ? (
@@ -389,8 +495,8 @@ export default function PayrollPage() {
                           )
                         )}
                         {!isAdmin && (
-                          <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: period.allPaid ? "#4ade8022" : "#f8717122", color: period.allPaid ? "#4ade80" : "#f87171", fontWeight: 600 }}>
-                            {period.allPaid ? "✓ Paid" : "Pending payment"}
+                          <span style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, background: TONE[periodCopy(period.start, period.state).tone] + "22", color: TONE[periodCopy(period.start, period.state).tone], fontWeight: 600 }}>
+                            {periodCopy(period.start, period.state, { paidAt: period.paidAt }).badge}
                           </span>
                         )}
                       </div>
