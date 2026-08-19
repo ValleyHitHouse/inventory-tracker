@@ -12,7 +12,13 @@ function startOfWeek(d: Date) {
   return x;
 }
 function fmt(d: Date) { return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
+function fmtY(d: Date) {
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+}
 function money(n: number) { return "$" + n.toFixed(2); }
+const MS_DAY = 86400000;
+const MS_WEEK = 7 * MS_DAY;
 
 function Delta({ cur, prev, invert }: { cur: number; prev: number; invert?: boolean }) {
   if (prev === 0 && cur === 0) return <span style={{ fontSize: 11, color: "#555" }}>—</span>;
@@ -26,6 +32,7 @@ export default function RecapPage() {
   const [breaks, setBreaks] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = the week before, ...
   const router = useRouter();
 
   useEffect(() => {
@@ -42,9 +49,12 @@ export default function RecapPage() {
   }, []);
 
   const now = new Date();
-  const thisMon = startOfWeek(now);
+  const curMon = startOfWeek(now);
+  // the week currently being viewed
+  const thisMon = new Date(curMon); thisMon.setDate(thisMon.getDate() - weekOffset * 7);
   const lastMon = new Date(thisMon); lastMon.setDate(lastMon.getDate() - 7);
   const nextMon = new Date(thisMon); nextMon.setDate(nextMon.getDate() + 7);
+  const weekEnd = new Date(nextMon.getTime() - MS_DAY);
 
   const inRange = (b: any, s: Date, e: Date) => {
     if (!b.date) return false;
@@ -53,6 +63,35 @@ export default function RecapPage() {
   };
   const thisWeek = breaks.filter(b => inRange(b, thisMon, nextMon));
   const lastWeek = breaks.filter(b => inRange(b, lastMon, thisMon));
+
+  // how far back we can scroll — the week of the oldest break on record
+  const earliestTs = breaks.reduce<number | null>((m, b) => {
+    if (!b.date) return m;
+    const t = new Date(b.date + "T12:00:00").getTime();
+    return m === null || t < m ? t : m;
+  }, null);
+  const maxOffset = earliestTs === null ? 0
+    : Math.max(0, Math.round((curMon.getTime() - startOfWeek(new Date(earliestTs)).getTime()) / MS_WEEK));
+
+  const weekOptions = Array.from({ length: maxOffset + 1 }, (_, i) => {
+    const s = new Date(curMon); s.setDate(s.getDate() - i * 7);
+    const e = new Date(s); e.setDate(e.getDate() + 7);
+    return { offset: i, start: s, end: new Date(e.getTime() - MS_DAY), count: breaks.filter(b => inRange(b, s, e)).length };
+  });
+
+  const goBack = () => setWeekOffset(o => Math.min(maxOffset, o + 1));
+  const goFwd = () => setWeekOffset(o => Math.max(0, o - 1));
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+      if (e.key === "ArrowLeft") goBack();
+      else if (e.key === "ArrowRight") goFwd();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [maxOffset]);
 
   const sum = (arr: any[], f: (b: any) => number) => arr.reduce((s, b) => s + f(b), 0);
   const rev = (arr: any[]) => sum(arr, b => parseFloat(b.revenue || "0"));
@@ -99,11 +138,37 @@ export default function RecapPage() {
         .rc-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
         .rc-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         @media (max-width: 768px) { .rc-grid { grid-template-columns: 1fr 1fr; } .rc-bottom { grid-template-columns: 1fr; } }
+        .rc-nav { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        .rc-nav button, .rc-nav select {
+          background: #111; border: 1px solid #1e1e1e; color: #e5e5e5;
+          border-radius: 8px; padding: 7px 12px; font-size: 13px; font-family: inherit; cursor: pointer;
+        }
+        .rc-nav button:hover:not(:disabled), .rc-nav select:hover { border-color: #333; background: #161616; }
+        .rc-nav button:disabled { color: #3a3a3a; cursor: default; }
+        .rc-nav select { max-width: 300px; }
+        .rc-today { color: #a78bfa; border-color: #2a2140 !important; }
       `}</style>
       <div className="rc-wrap">
         <div style={{ marginBottom: 22 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Weekly recap</h1>
-          <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Week of {fmt(thisMon)} – {fmt(new Date(nextMon.getTime() - 86400000))} · compared to the week before</p>
+          <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
+            Week of {fmtY(thisMon)} – {fmtY(weekEnd)} · compared to the week before
+            {weekOffset === 0 ? <span style={{ color: "#4ade80", marginLeft: 8 }}>· this week</span>
+              : <span style={{ color: "#666", marginLeft: 8 }}>· {weekOffset} week{weekOffset === 1 ? "" : "s"} ago</span>}
+          </p>
+
+          <div className="rc-nav">
+            <button onClick={goBack} disabled={weekOffset >= maxOffset} title="Earlier week (←)">← Earlier</button>
+            <select value={weekOffset} onChange={e => setWeekOffset(Number(e.target.value))} aria-label="Pick a week">
+              {weekOptions.map(w => (
+                <option key={w.offset} value={w.offset}>
+                  {fmtY(w.start)} – {fmtY(w.end)}{w.offset === 0 ? " (this week)" : ""} · {w.count} break{w.count === 1 ? "" : "s"}
+                </option>
+              ))}
+            </select>
+            <button onClick={goFwd} disabled={weekOffset === 0} title="Later week (→)">Later →</button>
+            {weekOffset !== 0 && <button className="rc-today" onClick={() => setWeekOffset(0)}>Jump to this week</button>}
+          </div>
         </div>
 
         {loading ? <p style={{ color: "#555" }}>Loading…</p> : (
@@ -120,8 +185,8 @@ export default function RecapPage() {
 
             <div className="rc-bottom">
               <div style={card}>
-                <div style={lbl}>🔥 Top buyers this week</div>
-                {topBuyers.length === 0 ? <p style={{ color: "#555", fontSize: 13, margin: "8px 0 0" }}>No orders this week yet.</p> : (
+                <div style={lbl}>🔥 Top buyers · {weekOffset === 0 ? "this week" : `wk of ${fmt(thisMon)}`}</div>
+                {topBuyers.length === 0 ? <p style={{ color: "#555", fontSize: 13, margin: "8px 0 0" }}>{weekOffset === 0 ? "No orders this week yet." : "No orders that week."}</p> : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
                     {topBuyers.map(([u, v], i) => (
                       <div key={u} onClick={() => router.push(`/customers/${encodeURIComponent(u)}`)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#0f0f0f", borderRadius: 8, cursor: "pointer" }}>
@@ -134,7 +199,7 @@ export default function RecapPage() {
               </div>
 
               <div style={card}>
-                <div style={lbl}>💰 Commission owed</div>
+                <div style={lbl}>💰 Commission owed · all-time</div>
                 {owedList.length === 0 ? <p style={{ color: "#4ade80", fontSize: 13, margin: "8px 0 0" }}>All breakers paid up ✓</p> : (
                   <>
                     <div style={{ fontSize: 22, fontWeight: 800, color: "#fb923c", margin: "2px 0 10px" }}>{money(totalOwed)} <span style={{ fontSize: 12, color: "#555", fontWeight: 400 }}>total owed</span></div>
@@ -153,7 +218,9 @@ export default function RecapPage() {
 
             {thisWeek.length === 0 && (
               <div style={{ ...card, marginTop: 16, textAlign: "center", padding: "32px 20px" }}>
-                <p style={{ color: "#666", fontSize: 14, margin: 0 }}>No breaks logged this week yet — numbers above are all zero until you run one.</p>
+                <p style={{ color: "#666", fontSize: 14, margin: 0 }}>{weekOffset === 0
+                  ? "No breaks logged this week yet — numbers above are all zero until you run one."
+                  : `No breaks logged the week of ${fmtY(thisMon)} – ${fmtY(weekEnd)}.`}</p>
               </div>
             )}
           </>
